@@ -1,0 +1,3 @@
+/home/benedict/CLionProjects/matrix_expo/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/benedict/CLionProjects/matrix_expo/cmake-build-debug/CMakeFiles/matrix_expo.dir
+/home/benedict/CLionProjects/matrix_expo/cmake-build-debug/CMakeFiles/edit_cache.dir

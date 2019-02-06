@@ -1,0 +1,22 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/benedict/CLionProjects/matrix_expo/main.c
+stdio.h
+-
+stdlib.h
+-
+float.h
+-
+memory.h
+-
+math.h
+-
+stdbool.h
+-
+
