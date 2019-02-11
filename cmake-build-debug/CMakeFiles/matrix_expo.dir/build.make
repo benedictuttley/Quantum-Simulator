@@ -79,6 +79,7 @@ matrix_expo_EXTERNAL_OBJECTS =
 
 matrix_expo: CMakeFiles/matrix_expo.dir/main.c.o
 matrix_expo: CMakeFiles/matrix_expo.dir/build.make
+matrix_expo: /opt/OpenBLAS/lib/libopenblas.a
 matrix_expo: CMakeFiles/matrix_expo.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/benedict/CLionProjects/matrix_expo/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking C executable matrix_expo"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/matrix_expo.dir/link.txt --verbose=$(VERBOSE)

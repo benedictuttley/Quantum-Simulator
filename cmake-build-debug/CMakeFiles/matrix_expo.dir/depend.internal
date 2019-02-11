@@ -3,3 +3,5 @@
 
 CMakeFiles/matrix_expo.dir/main.c.o
  /home/benedict/CLionProjects/matrix_expo/main.c
+ /opt/OpenBLAS/include/cblas.h
+ /opt/OpenBLAS/include/openblas_config.h
