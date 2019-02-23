@@ -1,3 +1,6 @@
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <stdio.h>  // CUDA TRANSFORM 1, [CHANGE: MULTIPLY WITH CUBLAS]
 #include <stdlib.h>
 #include <float.h>
@@ -5,8 +8,45 @@
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
+#include <cuda_runtime.h>
 #include <cblas.h>
 #include <cublas_v2.h>
+#include <cusolverDn.h>
+
+#define CUDA_CALL(res, str) { if (res != cudaSuccess) { printf("CUDA Error : %s : %s %d : ERR %s\n", str, __FILE__, __LINE__, cudaGetErrorName(res)); } }
+#define CUBLAS_CALL(res, str) { if (res != CUBLAS_STATUS_SUCCESS) { printf("CUBLAS Error : %s : %s %d : ERR %d\n", str, __FILE__, __LINE__, int(res)); } }
+
+
+#define cudacall(call)                                                                                                          \
+    do                                                                                                                          \
+    {                                                                                                                           \
+        cudaError_t err = (call);                                                                                               \
+        if(cudaSuccess != err)                                                                                                  \
+        {                                                                                                                       \
+            fprintf(stderr,"CUDA Error:\nFile = %s\nLine = %d\nReason = %s\n", __FILE__, __LINE__, cudaGetErrorString(err));    \
+            cudaDeviceReset();                                                                                                  \
+            exit(EXIT_FAILURE);                                                                                                 \
+        }                                                                                                                       \
+    }                                                                                                                           \
+    while (0)
+
+#define cublascall(call)                                                                                        \
+    do                                                                                                          \
+    {                                                                                                           \
+        cublasStatus_t status = (call);                                                                         \
+        if(CUBLAS_STATUS_SUCCESS != status)                                                                     \
+        {                                                                                                       \
+            fprintf(stderr,"CUBLAS Error:\nFile = %s\nLine = %d\nCode = %d\n", __FILE__, __LINE__, status);     \
+            cudaDeviceReset();                                                                                  \
+            exit(EXIT_FAILURE);                                                                                 \
+        }                                                                                                       \
+                                                                                                                \
+    }                                                                                                           \
+    while(0)
+
+
+
+
 
 void matrix_Write_New(double *A, int n) {
     FILE *f;
@@ -16,7 +56,7 @@ void matrix_Write_New(double *A, int n) {
         exit(1);
     }
 
-    /* print integers and floats */
+    /* print integers and doubles */
     for (int j = 0; j < n; ++j) {
         for (int i = 0; i < n; ++i) {
 
@@ -41,15 +81,15 @@ void matrix_Write_New(double *A, int n) {
 }
 
 
-//void matrix_Print_New(double *A, int n) {
-//    printf("\n");
-//    for (int l = 0; l < n; l++) {
-//        for (int i = 0; i < n; i++) {
-//            printf("|%20.15e|   ", A[(n * l) + i]);
-//        }
-//        printf("\n");
-//    }
-//}
+void matrix_Print_New(double *A, int n) {
+   printf("\n");
+   for (int l = 0; l < n; l++) {
+       for (int i = 0; i < n; i++) {
+           printf("|%20.15e|   ", A[(n * l) + i]);
+       }
+       printf("\n");
+   }
+}
 
 
 void copy_To_Device_For_Mult(double *h_A, double *h_B, double *h_C, double* d_A, double* d_B, double* d_C, int n){
@@ -164,61 +204,151 @@ void InverseOfMatrix_New(double *A, double *inv_New, int n) {   // !!PARALLEL CA
  
 }
 
+// HERE: ATTEMPT TO USE ON LARGE MATRICES AND TEST ACCURACY + REPLACE BATCH
 
-void InverseOfMatrix_Alternative(cublasHandle_t handle, double* L, double* inv, int n){
+void InverseOfMatrix_Alternative_Two(double* L, double* res2, int n, double* b){
+    cusolverStatus_t  status;
+    cusolverDnHandle_t handler;
+    status=cusolverDnCreate(&handler);
 
-     printf("__________________%lf\n", L[0] );
-
-    cublasHandle_t cu_cublasHandle;
-    cublasCreate(&cu_cublasHandle);
-
-    double** adL;
-    double** adC;
-    double* dL;
-    double* dC;
-    int* dLUPivots;
-    int* dLUInfo;
-
-    size_t szA = n * n * sizeof(double);
-
-    cudaMalloc(&adL, sizeof(double*));
-    cudaMalloc(&adC, sizeof(double*));
-    cudaMalloc(&dL, szA);
-    cudaMalloc(&dC, szA);
-    cudaMalloc(&dLUPivots, n * sizeof(int));
-    cudaMalloc(&dLUInfo, sizeof(int));
-
-    cudaMemcpy(dL, L, szA, cudaMemcpyHostToDevice);
-    cudaMemcpy(adL, &dL, sizeof(double*), cudaMemcpyHostToDevice);
-    cudaMemcpy(adC, &dC, sizeof(double*), cudaMemcpyHostToDevice);
-
-  
-
-    cublasDgetrfBatched(cu_cublasHandle, n, adL, n, dLUPivots, dLUInfo, 1);
-    cudaDeviceSynchronize();
-    cublasDgetriBatched(cu_cublasHandle, n, (const double **)adL, n, dLUPivots, adC, n, dLUInfo, 1);
-    cudaDeviceSynchronize();
-
+    double* A;
+    int* dLUPivots_ALT;
+    int* dLUInfo_ALT;
+    double *buffer = NULL;
+    int bufferSize = 0;
+    int h_info = 0;
+    double *x;
     
 
-    double* res = (double*)malloc(szA);
-    printf("__________________%lf\n", res[0] );
 
-    cudaMemcpy(res, dC, szA, cudaMemcpyDeviceToHost);
-    printf("__________________%lf\n", res[0] );
-    cudaFree(adL);
-    cudaFree(adC);
-    cudaFree(dL);
-    cudaFree(dC);
-    cudaFree(dLUPivots);
-    cudaFree(dLUInfo);
+    CUDA_CALL(cudaMalloc(&A, sizeof(double)*n*n), "Failed to allocate A!");
+    CUDA_CALL(cudaMalloc(&x, n * n*sizeof(double)), "Failed to allocate x!");
+     
+    CUDA_CALL(cudaMalloc(&dLUPivots_ALT, n * sizeof(int)), "Failed to allocate dLUPivots!");
+    CUDA_CALL(cudaMalloc(&dLUInfo_ALT, sizeof(int)), "Failed to allocate dLUInfo!");
+    CUDA_CALL(cudaMemcpy(A, L, n*n*sizeof(double), cudaMemcpyHostToDevice), "Failed to copy to adL!");
+    cudaMemcpy(x, b, sizeof(double)*n*n, cudaMemcpyHostToDevice);
 
-   cublasDestroy(cu_cublasHandle);
+    cusolverDnDgetrf_bufferSize(handler, n, n, (double*)A, n, &bufferSize);
+    cudaMalloc(&buffer, sizeof(double)*bufferSize);
+  
+    status=cusolverDnDgetrf(handler, n, n, A, n, buffer, dLUPivots_ALT, dLUInfo_ALT);
+    if(status!=CUSOLVER_STATUS_SUCCESS){
+        printf("ERROR!!\n");
+    } 
 
-   // return res;
-   exit(0);
+    cudaMemcpy(&h_info, dLUInfo_ALT, sizeof(int), cudaMemcpyDeviceToHost);
+ 
+    if ( 0 != h_info ){
+        fprintf(stderr, "Error: LU factorization failed\n");
+        printf("%d\n", h_info );
+    }
+    
+  
+    cusolverDnDgetrs(handler, CUBLAS_OP_N, n, n, A, n, dLUPivots_ALT, x, n, dLUInfo_ALT);
+    cudaDeviceSynchronize();
+     if(status!=CUSOLVER_STATUS_SUCCESS){
+        printf("ERROR!!\n");
+    } 
+    cudaMemcpy(&h_info, dLUInfo_ALT, sizeof(int), cudaMemcpyDeviceToHost);
+    // printf("HERE WE ARE \n");
+        if ( 0 != h_info ){
+        fprintf(stderr, "Error: LU factorization failed\n");
+        
+    }
+
+   // double* res2 = (double*)malloc(n * n * sizeof(double));
+
+    CUDA_CALL(cudaMemcpy(res2, x, sizeof(double) * n * n, cudaMemcpyDeviceToHost), "Failed to copy to res!");
+
+    // for(int i = 0; i < n; i++){
+    //     for (int j = 0; j < n; j++)
+    //     {
+    //         printf("%f ", res2[(n*i) + j] );
+    //     }
+    //     printf("\n");
+    // }
+}
+void InverseOfMatrix_Alternative(cublasHandle_t handle, double* input, double* inv, int n){
+
+    //cublasHandle_t handle;
+    //cublascall(cublasCreate_v2(&handle));
+
+
+////////////////////////
+    double* src_d, *dst_d;
+    cudacall(cudaMalloc<double>(&src_d,n * n * sizeof(double)));
+    cudacall(cudaMemcpy(src_d,input,n * n * sizeof(double),cudaMemcpyHostToDevice));
+
+    cudacall(cudaMalloc<double>(&dst_d,n * n * sizeof(double)));
+
+////////////////////////
+
+
+
+    int batchSize = 1;
+
+    int *P, *INFO;
+
+    cudacall(cudaMalloc<int>(&P,n * batchSize * sizeof(int)));
+    cudacall(cudaMalloc<int>(&INFO,batchSize * sizeof(int)));
+
+    int lda = n;
+
+    double *A[] = { src_d };
+    double** A_d;
+    cudacall(cudaMalloc<double*>(&A_d,sizeof(A)));
+    cudacall(cudaMemcpy(A_d,A,sizeof(A),cudaMemcpyHostToDevice));
+
+    cublascall(cublasDgetrfBatched(handle,n,A_d,lda,P,INFO,batchSize));
+
+    int INFOh = 0;
+    printf("%d\n", INFOh );
+    cudacall(cudaMemcpy(&INFOh,INFO,sizeof(int),cudaMemcpyDeviceToHost));
+    //printf("HERE\n");
+
+    if(INFOh == n)
+    {
+        printf("IN CONDITIONAL\n");
+        fprintf(stderr, "Factorization Failed: Matrix is singular\n");
+        cudaDeviceReset();
+        exit(EXIT_FAILURE);
+    }
+
+   // printf("HERE TOO\n");
+    double* C[] = { dst_d };
+    //printf("HERE THREE\n");
+    double** C_d;
+    cudacall(cudaMalloc<double*>(&C_d,sizeof(C)));
+    cudacall(cudaMemcpy(C_d,C,sizeof(C),cudaMemcpyHostToDevice));
+    //printf("HERE FOUR\n");
+
+    cublascall(cublasDgetriBatched(handle, n, (const double**) A_d,lda,P,C_d,lda,INFO,batchSize));
+    //printf("HERE FIVE\n");
+
+    cudacall(cudaMemcpy(&INFOh,INFO,sizeof(int),cudaMemcpyDeviceToHost));
+    //printf("HERE SIX\n");
+
+    if(INFOh != 0)
+    {
+        //printf("IN CONDITIONAL 2\n");
+        fprintf(stderr, "Inversion Failed: Matrix is singular\n");
+        cudaDeviceReset();
+        exit(EXIT_FAILURE);
+    }
+    
+    //printf("HERE ALSO ");
+    cudaFree(P), cudaFree(INFO), cublasDestroy_v2(handle);
+
+    cudacall(cudaMemcpy(inv,dst_d,n * n * sizeof(double),cudaMemcpyDeviceToHost));
+    //printf("%lf\n", inv[20]);
+    //matrix_Print_New(inv, n);
+    cudaFree(src_d), cudaFree(dst_d);
+
 
 }
+
+///////////////////////////////////////////////////////////////////////////////////
 
 
 void matrix_Subtract_New(const double *a, const double *b, double *c, int n) {
@@ -680,7 +810,9 @@ int main() {
 
         clock_t inverse_begin = clock();
         //InverseOfMatrix_New(V_new, temp_2_new, n);
-        InverseOfMatrix_Alternative(handle, V_new, temp_2_new, n);
+        //InverseOfMatrix_Alternative(handle, V_new, temp_2_new, n);
+        InverseOfMatrix_Alternative_Two(V_new, temp_2_new, n, identity_new);
+       
         clock_t inverse_end = clock();
         double time_spent = (double)(inverse_end - inverse_begin) / CLOCKS_PER_SEC;
         double inverse_total_time = inverse_total_time + time_spent;
