@@ -1,3 +1,4 @@
+//export PATH=/usr/local/cuda-9.1/bin:$PATH
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -58,12 +59,12 @@ int main(int argc, char *argv[])
         *scp++ = 0.0;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &t1); 
-  	/* Performs operation using blas */
-  	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, dim, dim, dim, alpha, psa, dim, psb, dim, beta, psc, dim);
-  	clock_gettime(CLOCK_MONOTONIC, &t2); 
-  	deltaT = timeDiff(&t1, &t2);
-  	printf(" *** Elapsed Time [BLAS] = %6.4f secs *** \n", deltaT);
+   //  clock_gettime(CLOCK_MONOTONIC, &t1); 
+  	// /* Performs operation using blas */
+  	// cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, dim, dim, dim, alpha, psa, dim, psb, dim, beta, psc, dim);
+  	// clock_gettime(CLOCK_MONOTONIC, &t2); 
+  	// deltaT = timeDiff(&t1, &t2);
+  	// printf(" *** Elapsed Time [BLAS] = %6.4f secs *** \n", deltaT);
     
  
   /* Initialize CUDA */
@@ -152,20 +153,20 @@ if (status != CUBLAS_STATUS_SUCCESS) {
       return EXIT_FAILURE;
   }
 
-for (int i = 0; i < dim; ++i)
- {
- for (int j = 0; j < dim; j++)
-    {
-    	//printf("%lf",psc[(dim*i) + j] );
-    	//printf("---- %lf\n",psc_GPU[(dim*i) + j] );
-       if (psc[(dim*i) + j] != psc_GPU[(dim*i) + j])
-       {
-           printf("ERROR!!!\n");
-           exit(1);
-         }
-   }   
- }
- printf("\nOUTPUT IS THE SAME\n");
+// for (int i = 0; i < dim; ++i)
+//  {
+//  for (int j = 0; j < dim; j++)
+//     {
+//     	//printf("%lf",psc[(dim*i) + j] );
+//     	//printf("---- %lf\n",psc_GPU[(dim*i) + j] );
+//        if (psc[(dim*i) + j] != psc_GPU[(dim*i) + j])
+//        {
+//            printf("ERROR!!!\n");
+//            exit(1);
+//          }
+//    }   
+//  }
+//  printf("\nOUTPUT IS THE SAME\n");
 
 }
 
