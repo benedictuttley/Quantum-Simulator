@@ -81,8 +81,8 @@ int main(int argc, char *argv[])
   scp = psc_GPU;
   for (i = 0; i < dim; i++) {
     for (j = 0; j < dim; j++) {
-      sap[(dim*i) + j] = ((dim*i) + j);
-      sbp[(dim*i) + j] = ((dim*i) + j);
+      sap[(dim*i) + j] = (double)rand() / (double)RAND_MAX;
+      sbp[(dim*i) + j] = (double)rand() / (double)RAND_MAX;
       *scp++ = 0.0;
     }
   }

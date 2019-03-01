@@ -135,6 +135,7 @@ if (status != CUBLAS_STATUS_SUCCESS) {
   /* Performs operation using cublas */
   clock_gettime(CLOCK_MONOTONIC, &t1);
   cublasSgemm('n', 'n', dim, dim, dim, alpha, pda, dim, pdb, dim, beta, pdc, dim);
+  cudaDeviceSynchronize();
   clock_gettime(CLOCK_MONOTONIC, &t2); 
   deltaT = timeDiff(&t1, &t2);
   printf(" *** Elapsed Time [CUBLAS MULTIPLY] = %6.4f secs *** \n", deltaT);
