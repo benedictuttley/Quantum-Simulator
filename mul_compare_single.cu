@@ -18,7 +18,6 @@ double timeDiff( struct timespec *t1, struct timespec *t2)
 int main(int argc, char *argv[])
 {
   int dim = atoi(argv[1]);
-  printf("%d\n", dim);
   int i,j;
   int status;
  
@@ -58,14 +57,6 @@ int main(int argc, char *argv[])
         sbp[(dim*i) + j] = ((dim*i) + j);
         *scp++ = 0.0;
     }
-
-   //  clock_gettime(CLOCK_MONOTONIC, &t1); 
-  	// /* Performs operation using blas */
-  	// cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, dim, dim, dim, alpha, psa, dim, psb, dim, beta, psc, dim);
-  	// clock_gettime(CLOCK_MONOTONIC, &t2); 
-  	// deltaT = timeDiff(&t1, &t2);
-  	// printf(" *** Elapsed Time [BLAS] = %6.4f secs *** \n", deltaT);
-    
  
   /* Initialize CUDA */
   status = cublasInit();
@@ -127,9 +118,13 @@ cudaHostGetDevicePointer(&pdc, psc_GPU, 0);
  
   /* Clear last error */
   cublasGetError();
-  clock_gettime(CLOCK_MONOTONIC, &t1); 
+   
+  clock_gettime(CLOCK_MONOTONIC, &t1);
   status = cudaMemcpy(pdb, psb, dim * dim * sizeof(*psb), cudaMemcpyHostToDevice);
   status = cudaMemcpy(pda, psa, dim * dim * sizeof(*psa), cudaMemcpyHostToDevice);
+  clock_gettime(CLOCK_MONOTONIC, &t2); 
+  deltaT = timeDiff(&t1, &t2);
+  printf(" *** Elapsed Time [CUBLAS COPY TO DEVICE] = %6.4f secs *** \n", deltaT);
 
 if (status != CUBLAS_STATUS_SUCCESS) {
       fprintf (stderr, "!!!! device access error (write B)\n");
@@ -138,15 +133,20 @@ if (status != CUBLAS_STATUS_SUCCESS) {
   }
 
   /* Performs operation using cublas */
+  clock_gettime(CLOCK_MONOTONIC, &t1);
   cublasSgemm('n', 'n', dim, dim, dim, alpha, pda, dim, pdb, dim, beta, pdc, dim);
-
-  status = cudaMemcpy(psc_GPU, pdc, dim * dim * sizeof(*pdc), cudaMemcpyDeviceToHost);
-
-
-
   clock_gettime(CLOCK_MONOTONIC, &t2); 
   deltaT = timeDiff(&t1, &t2);
-  printf(" *** Elapsed Time [CUBLAS] = %6.4f secs *** \n", deltaT);
+  printf(" *** Elapsed Time [CUBLAS MULTIPLY] = %6.4f secs *** \n", deltaT);
+
+  clock_gettime(CLOCK_MONOTONIC, &t1);
+  status = cudaMemcpy(psc_GPU, pdc, dim * dim * sizeof(*pdc), cudaMemcpyDeviceToHost);
+  clock_gettime(CLOCK_MONOTONIC, &t2); 
+  deltaT = timeDiff(&t1, &t2);
+  printf(" *** Elapsed Time [CUBLAS COPY TO HOST] = %6.4f secs *** \n", deltaT);
+
+
+  
   status = cublasGetError();
   if (status != CUBLAS_STATUS_SUCCESS) {
       fprintf (stderr, "!!!! kernel execution error.\n");
