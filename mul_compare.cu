@@ -4,7 +4,10 @@
 #include <math.h>
 #include <time.h>
 #include <cublas.h>
+#include <cublas_v2.h>
 #include <cblas.h>
+#include <cuComplex.h>
+
 void resuse(char *str);
  
 double timeDiff( struct timespec *t1, struct timespec *t2)
@@ -22,12 +25,10 @@ int main(int argc, char *argv[])
   int i,j;
   int status;
  
-  double *psa, *psb, *psc, *psc_GPU;
-  double *sap, *sbp, *scp;
-  double *pda, *pdb, *pdc;
+  cuDoubleComplex *psa, *psb, *psc, *psc_GPU;
+  cuDoubleComplex *sap, *sbp, *scp;
+  cuDoubleComplex *pda, *pdb, *pdc;
  
-  double alpha   = 1.0;
-  double beta    = 0.0;
   float  deltaT  = 0.0;
   struct timespec t1;
   struct timespec t2;
@@ -37,9 +38,15 @@ int main(int argc, char *argv[])
   pda = NULL;
   pdb = NULL;
   pdc = NULL;
-  psa = (double *) malloc(dim * dim * sizeof(*psa) );
-  psb = (double *) malloc(dim * dim * sizeof(*psb) );
-  psc = (double *) malloc(dim * dim * sizeof(*psc) );
+  // psa = (cuDoubleComplex *) malloc(dim * dim * sizeof(*psa) );
+  // psb = (cuDoubleComplex *) malloc(dim * dim * sizeof(*psb) );
+  // psc = (cuDoubleComplex *) malloc(dim * dim * sizeof(*psc) );
+
+  cudaMallocHost((void**)&psa, dim * dim * sizeof(*psa));
+  cudaMallocHost((void**)&psb, dim * dim * sizeof(*psb));
+  cudaMallocHost((void**)&psc, dim * dim * sizeof(*psc));
+
+
   //psc_GPU = (double *) malloc(dim * dim * sizeof(*psc) );
  cudaHostAlloc((void**) &psc_GPU, dim * dim * sizeof(*psc), cudaHostAllocMapped);
  
@@ -54,9 +61,9 @@ int main(int argc, char *argv[])
   scp = psc;
   for (i = 0; i < dim; i++)
     for (j = 0; j < dim; j++) {
-        sap[(dim*i) + j] = ((dim*i) + j);
-        sbp[(dim*i) + j] = ((dim*i) + j);
-        *scp++ = 0.0;
+        sap[(dim*i) + j].x = ((dim*i) + j);
+        sbp[(dim*i) + j].x = ((dim*i) + j);
+        
     }
 
    //  clock_gettime(CLOCK_MONOTONIC, &t1); 
@@ -81,9 +88,9 @@ int main(int argc, char *argv[])
   scp = psc_GPU;
   for (i = 0; i < dim; i++) {
     for (j = 0; j < dim; j++) {
-      sap[(dim*i) + j] = (double)rand() / (double)RAND_MAX;
-      sbp[(dim*i) + j] = (double)rand() / (double)RAND_MAX;
-      *scp++ = 0.0;
+      sap[(dim*i) + j].x = (double)rand() / (double)RAND_MAX;
+      sbp[(dim*i) + j].x = (double)rand() / (double)RAND_MAX;
+      
     }
   }
   
@@ -121,15 +128,19 @@ if (status != cudaSuccess)
  
 
 cudaHostGetDevicePointer(&pdc, psc_GPU, 0);
-
-
   
-
-  
+  cublasHandle_t handle;
+  cublasCreate(&handle);
  
+  const cuDoubleComplex alf = make_cuDoubleComplex(1, 0);
+  const cuDoubleComplex bet = make_cuDoubleComplex(0, 0);
+  const cuDoubleComplex *alpha = &alf;
+  const cuDoubleComplex *beta = &bet;
+
+
   /* Clear last error */
   cublasGetError();
-   
+  
   clock_gettime(CLOCK_MONOTONIC, &t1);
   status = cudaMemcpy(pdb, psb, dim * dim * sizeof(*psb), cudaMemcpyHostToDevice);
   status = cudaMemcpy(pda, psa, dim * dim * sizeof(*psa), cudaMemcpyHostToDevice);
@@ -143,9 +154,14 @@ if (status != CUBLAS_STATUS_SUCCESS) {
       return EXIT_FAILURE;
   }
 
+
+
   /* Performs operation using cublas */
   clock_gettime(CLOCK_MONOTONIC, &t1);
-  cublasDgemm('n', 'n', dim, dim, dim, alpha, pda, dim, pdb, dim, beta, pdc, dim);
+  //cublasDgemm('n', 'n', dim, dim, dim, alpha, pda, dim, pdb, dim, beta, pdc, dim);
+
+  // Attempt to use optimised complex matrix multiplication:
+  cublasZgemm3m(handle, CUBLAS_OP_N, CUBLAS_OP_N, dim, dim, dim, alpha, pdb, dim, pda, dim, beta, pdc, dim);
   cudaDeviceSynchronize();
   clock_gettime(CLOCK_MONOTONIC, &t2); 
   deltaT = timeDiff(&t1, &t2);
