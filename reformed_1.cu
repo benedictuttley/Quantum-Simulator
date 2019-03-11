@@ -1,21 +1,19 @@
+// Dependencies:
 #include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <stdio.h>  
 #include <stdlib.h>
 #include <float.h>
-#include <memory.h>
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
-#include <cuda_runtime.h>
-#include <cblas.h>
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <cuComplex.h>
 #include "expm.h"
 
-// *** Matrix exponential program acting on matrices of type : [Double Complex] - 10/03/2019 ***
+// *** Matrix exponential program acting on [LARGE] matrices of type : [Double Complex] - 10/03/2019 ***
 
 // Converting synchronous program to be more asynchronous and thus allow for better utilization of GPU resources
 // and GPU memory copies as to reduce overall runtime
@@ -45,14 +43,51 @@
 // For smaller matrices (e.g. 50 * 50) more concurrency is witnissed (50% overlap) - 'A more concurrent
 // execution.'
 
+// Note that use of 3dgemm makes for faster runtime nut gives small differemce in results e-15 error, so not of huge
+// concern and speedup is probably worth the accuracy loss.
+
+void matrix_complex_write(cuDoubleComplex *A, int n) {
+    FILE *f;
+    f = fopen("/home/c1673666/expm_Cuda/cuda/Quantum-Simulator/CUDA_RESULTS.txt", "w");
+    if (f == NULL) {
+        printf("Error opening file!\n");
+        exit(1);
+    }
+
+    for (int j = 0; j < n; ++j) {
+        for (int i = 0; i < n; ++i) {
+
+            if (i == n - 1) {
+                if (A[(n * j) + i].x == INFINITY) {
+                    fprintf(f, "Inf");
+                } else {
+                    fprintf(f, " %.15lf ", A[(j*n) + i].x );
+                    fprintf(f, "+");
+                    fprintf(f, " %.15lfi ", A[(j*n) + i].y );
+                }
+            } else {
+                if (A[(n * j) + i].x == INFINITY) {
+                    fprintf(f, "Inf ");
+                } else {
+                        fprintf(f, " %.15lf ", A[(j*n) + i].x );
+                        fprintf(f, "+");
+                        fprintf(f, " %.15lfi ", A[(j*n) + i].y );;
+                    }
+                }
+            }
+            fprintf(f, "\n");
+        }
+        fclose(f);
+    }
+
 
 void matrix_complex_print(cuDoubleComplex* A, int network_size){
 	for (int j = 0; j < network_size; j++){
 		printf("[");
 		for (int k = 0; k < network_size; k++){
-			printf(" %.15lf ", A[(j*network_size) + k].x );
+			printf(" %.16lf ", A[(j*network_size) + k].x );
 			printf("+");
-			printf(" %.15lfi ", A[(j*network_size) + k].y );
+			printf(" %.16lfi ", A[(j*network_size) + k].y );
 		}
 		printf("]");
 		printf("\n");
@@ -76,36 +111,7 @@ void matrix_Square_Reduced(cublasHandle_t &handle, cuDoubleComplex *d_A, cuDoubl
     clock_t multiply_end = clock();
     double time_spent = (double)(multiply_end - multiply_begin) / CLOCKS_PER_SEC;
     multiply_total_time[0] = multiply_total_time[0] + time_spent;
-
-
 }
-
-
-
-void matrix_Square(cublasHandle_t &handle, cuDoubleComplex *A, cuDoubleComplex *C, cuDoubleComplex *d_A, cuDoubleComplex *d_C, int n, double* multiply_total_time, int s){
-	
-    clock_t multiply_begin = clock();
-
-	const cuDoubleComplex alf = make_cuDoubleComplex(1, 0);
-    const cuDoubleComplex bet = make_cuDoubleComplex(0, 0);
-    const cuDoubleComplex *alpha = &alf;
-    const cuDoubleComplex *beta = &bet;
-	
-	cudaMemcpy(d_A, A, n * n * sizeof(cuDoubleComplex),cudaMemcpyHostToDevice);	// Copy first operand to the device (only one copy is needed for the squaring phase)
-
-	for (int k = 0; k < s; k++) {
-		cublasZgemm3m(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, alpha, d_A, n, d_A, n, beta, d_C, n); // Perform the cublas matrix multiplication
-        cudaMemcpy(d_A, d_C, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-    }
-
-    cudaMemcpy(C, d_C, n * n * sizeof(cuDoubleComplex),cudaMemcpyDeviceToHost);	// Copy product back to host
- 	
- 	clock_t multiply_end = clock();
-    double time_spent = (double)(multiply_end - multiply_begin) / CLOCKS_PER_SEC;
-    multiply_total_time[0] = multiply_total_time[0] + time_spent;
-
-}
-
 
 
 void matrix_Multiply_Reduced(cublasHandle_t &handle, cuDoubleComplex *d_A, cuDoubleComplex* d_B, cuDoubleComplex *d_C, int n, double* multiply_total_time){
@@ -122,10 +128,7 @@ void matrix_Multiply_Reduced(cublasHandle_t &handle, cuDoubleComplex *d_A, cuDou
     clock_t multiply_end = clock();
     double time_spent = (double)(multiply_end - multiply_begin) / CLOCKS_PER_SEC;
     multiply_total_time[0] = multiply_total_time[0] + time_spent;
-
-
 }
-
 
 void matrix_Multiply(cublasHandle_t &handle, cuDoubleComplex *A, cuDoubleComplex *B, cuDoubleComplex *C, cuDoubleComplex *d_A, cuDoubleComplex* d_B, cuDoubleComplex *d_C, int n, double* multiply_total_time){
 
@@ -149,29 +152,6 @@ void matrix_Multiply(cublasHandle_t &handle, cuDoubleComplex *A, cuDoubleComplex
 }
 
 
-void matrix_Multiply_With_Streams(cublasHandle_t &handle, cuDoubleComplex *A, cuDoubleComplex *B, cuDoubleComplex *C, cuDoubleComplex *d_A, cuDoubleComplex* d_B, cuDoubleComplex *d_C, int n, double* multiply_total_time, cudaStream_t stream){
- clock_t multiply_begin = clock();
-
-    const cuDoubleComplex alf = make_cuDoubleComplex(1, 0);
-    const cuDoubleComplex bet = make_cuDoubleComplex(0, 0);
-    const cuDoubleComplex *alpha = &alf;
-    const cuDoubleComplex *beta = &bet;
-
-    cudaMemcpyAsync(d_A, A, n * n * sizeof(cuDoubleComplex),cudaMemcpyHostToDevice, stream); // Copy first operand to the device
-    cudaMemcpyAsync(d_B, B, n * n * sizeof(cuDoubleComplex),cudaMemcpyHostToDevice, stream); // Copy second operand to the device
-
-    cublasSetStream(handle, stream);
-    cublasZgemm3m(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, alpha, d_B, n, d_A, n, beta, d_C, n); // Perform the cublas matrix multiplication
-
-    cudaMemcpyAsync(C, d_C, n * n * sizeof(cuDoubleComplex),cudaMemcpyDeviceToHost, stream); // Copy product back to host
-    
-    clock_t multiply_end = clock();
-    double time_spent = (double)(multiply_end - multiply_begin) / CLOCKS_PER_SEC;
-    multiply_total_time[0] = multiply_total_time[0] + time_spent;
-
-}
-
-
 cuDoubleComplex **get_Matrix_Powers_New(cuDoubleComplex *A, cuDoubleComplex* d_A, cuDoubleComplex* d_B, cuDoubleComplex* d_C, cublasHandle_t handle, int n, double* multiply_total_time) {
 
     cuDoubleComplex **Tpowers = (cuDoubleComplex **) malloc(11 * sizeof(cuDoubleComplex *));
@@ -187,8 +167,6 @@ cuDoubleComplex **get_Matrix_Powers_New(cuDoubleComplex *A, cuDoubleComplex* d_A
     matrix_Multiply(handle, Tpowers[1], Tpowers[1], Tpowers[2], d_A, d_B, d_C, n, multiply_total_time);
      
     matrix_Multiply(handle, Tpowers[2], Tpowers[2], Tpowers[4], d_A, d_B, d_C, n, multiply_total_time);
-
-
 
     matrix_Multiply(handle, Tpowers[4], Tpowers[2], Tpowers[6], d_A, d_B, d_C, n, multiply_total_time);
    
@@ -217,25 +195,33 @@ cuDoubleComplex **get_Matrix_Powers_New(cuDoubleComplex *A, cuDoubleComplex* d_A
 
  * SOURCE: https://math.stackexchange.com/questions/1009916/easy-way-to-calculate-inverse-of-an-lu-decomposition
 */
-void InverseOfMatrix_Alternative_Two(cuDoubleComplex* d_in, cuDoubleComplex* d_out, int n){ 
-    
-    cusolverStatus_t status;	// Link to the cusolver context
+
+void InverseOfMatrix_Alternative_Three(cuDoubleComplex* L, cuDoubleComplex* inverse, int n, cuDoubleComplex* b){
+   
+    cusolverStatus_t  status;   // Link to the cusolver context
     cusolverDnHandle_t handler;
     status = cusolverDnCreate(&handler);
 
+    cuDoubleComplex* A;
     int* dLUPivots_ALT;
     int* dLUInfo_ALT;
     cuDoubleComplex *buffer = NULL;
     int bufferSize = 0;
     int h_info = 0;
+    cuDoubleComplex *x;
+
+    cudaMalloc(&A, sizeof(cuDoubleComplex)*n*n), "Failed to allocate A!";
+    cudaMalloc(&x, n * n*sizeof(cuDoubleComplex)), "Failed to allocate x!";
      
     cudaMalloc(&dLUPivots_ALT, n * sizeof(int)), "Failed to allocate dLUPivots!";
     cudaMalloc(&dLUInfo_ALT, sizeof(int)), "Failed to allocate dLUInfo!";
+    cudaMemcpy(A, L, n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice), "Failed to copy to adL!";
+    cudaMemcpy(x, b, sizeof(cuDoubleComplex)*n*n, cudaMemcpyHostToDevice);
 
-    cusolverDnZgetrf_bufferSize(handler, n, n, (cuDoubleComplex*)d_in, n, &bufferSize);
+    cusolverDnZgetrf_bufferSize(handler, n, n, (cuDoubleComplex*)A, n, &bufferSize);
     cudaMalloc(&buffer, sizeof(cuDoubleComplex)*bufferSize);
   
-    status = cusolverDnZgetrf(handler, n, n, d_in, n, buffer, dLUPivots_ALT, dLUInfo_ALT);
+    status = cusolverDnZgetrf(handler, n, n, A, n, buffer, dLUPivots_ALT, dLUInfo_ALT);
     if(status!=CUSOLVER_STATUS_SUCCESS){
         printf("ERROR!!\n");
     } 
@@ -247,7 +233,7 @@ void InverseOfMatrix_Alternative_Two(cuDoubleComplex* d_in, cuDoubleComplex* d_o
         printf("%d\n", h_info );
     }
       
-    status = cusolverDnZgetrs(handler, CUBLAS_OP_N, n, n, d_in, n, dLUPivots_ALT, d_out, n, dLUInfo_ALT);
+    cusolverDnZgetrs(handler, CUBLAS_OP_N, n, n, A, n, dLUPivots_ALT, x, n, dLUInfo_ALT);
     cudaDeviceSynchronize();
      if(status!=CUSOLVER_STATUS_SUCCESS){
         printf("ERROR!!\n");
@@ -256,12 +242,16 @@ void InverseOfMatrix_Alternative_Two(cuDoubleComplex* d_in, cuDoubleComplex* d_o
         if ( h_info != 0 ){
         fprintf(stderr, "Error: LU factorization failed\n");
     }
+    cudaMemcpy(inverse, x, sizeof(cuDoubleComplex) * n * n, cudaMemcpyDeviceToHost), "Failed to copy to res!";
 
     // Free device memory:
     cudaFree(dLUPivots_ALT);
     cudaFree(dLUInfo_ALT);
+    cudaFree(A);
+    cudaFree(x);
     cudaFree(buffer);
 }
+
 
 void matrix_Subtract_New(const cuDoubleComplex *a, const cuDoubleComplex *b, cuDoubleComplex *c, int n) { // PARALLEL CANDIDATE
 
@@ -341,12 +331,11 @@ void scale_tester(cublasHandle_t handle, cuDoubleComplex* d_A, cuDoubleComplex* 
 void scale_tester_alt(cublasHandle_t handle, cuDoubleComplex* d_A, cuDoubleComplex* d_B, cuDoubleComplex* d_C, const cuDoubleComplex alf, int n, double* scale_total_time ){
 
     clock_t scale_begin = clock();
-    //const cuDoubleComplex alf = make_cuDoubleComplex(1, 0);
+
     const cuDoubleComplex bet = make_cuDoubleComplex(1, 0);
     const cuDoubleComplex *alpha = &alf;
     const cuDoubleComplex *beta = &bet;
 
-    //cublasZdgmm(handle, mode, n,n, d_A, n, d_X, n, d_C, n);
     cublasZgeam(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, alpha, d_A, n, beta, d_B, n, d_C, n);
 
     clock_t scale_end = clock();
@@ -410,23 +399,22 @@ double calculate_one_norm_New_complex(const cuDoubleComplex *A, int n) {
 double ell(cuDoubleComplex *A, cuDoubleComplex *temp_new, cuDoubleComplex *d_A, double coeff, int m_val, int n, double* scale_total_time, cublasHandle_t &handle, cudaStream_t stream) {
 
     double norm_one, norm_two, p, alpha, output;
-    memcpy(A, temp_new, n * n * sizeof(cuDoubleComplex));
+    memcpy(temp_new, A, n * n * sizeof(cuDoubleComplex));
     
-    matrix_Absolute_New(A, temp_new, n);
+    matrix_Absolute_New(temp_new, temp_new, n);
 
     p = pow(coeff, (1.0 / (2 * m_val + 1)));
     
     cudaMemcpyAsync(d_A, temp_new, n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice, stream);
     scale_tester(handle, d_A, NULL, d_A, make_cuDoubleComplex(p, 0), n, scale_total_time);
     cudaMemcpyAsync(temp_new, d_A, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost, stream);
+    norm_one = calculate_one_norm_New_complex(temp_new, n); // Overlap GPU & CPU WORK WITH ASYNC CALLS
     
-    norm_one = calculate_one_norm_New_complex(A, n); // Overlap GPU & CPU WORK WITH ASYNC CALLS
-
     cudaDeviceSynchronize();
-    norm_two = calculate_one_norm_New_complex(temp_new, n);
+    norm_two = calculate_one_norm_New_complex(A, n);
     
-    alpha = norm_two / norm_one;
-
+    alpha = norm_one / norm_two;
+    
     output = fmax(ceil(log2((2 * alpha) / 2.220446049250313e-16) / (2 * m_val)), 0);
 
     return output;
@@ -468,24 +456,30 @@ void get_pade_coefficients(double *buf, int m) {
     }
 }
 
-int main(){
 
-    cuDoubleComplex* A;
-    int n = 1024;
+//int main(int argc, char **argv){
+cuDoubleComplex* expm_new(cuDoubleComplex* A, cuDoubleComplex* X, int network_size){
+    printf("****************************** EXPM PROGRAM BEGINS ******************************\n");
+    int n = network_size;
+
+ 
+
+    // cuDoubleComplex* A;
+    // int n = atoi(argv[1]);
 
     // Allocate the pinned memory:
-    cudaMallocHost((void**)&A, n*n*sizeof(cuDoubleComplex));
+    //cudaMallocHost((void**)&A, n*n*sizeof(cuDoubleComplex));
 
 
     // Initialize the pinned memory:
-    for (int i = 0; i < n; i++)
-    {
-        for (int j = 0; j < n; ++j)
-        {
-           A[(n*i) + j].x = 0.01;
-           A[(n*i) + j].y = 0.0035;
-        }
-    }
+    // for (int i = 0; i < n; i++)
+    // {
+    //     for (int j = 0; j < n; ++j)
+    //     {
+    //        A[(n*i) + j].x = 1;
+    //        A[(n*i) + j].y = 1;
+    //     }
+    // }
     
 
     clock_t setup_begin = clock();
@@ -558,8 +552,6 @@ int main(){
     matrix_Multiply(handle, Tpowers[2], Tpowers[2], Tpowers[4], d_A, d_B, d_C, n, multiply_total_time);
 
     // Attempt to have concurrency:
-    //matrix_Multiply_With_Streams(handle, Tpowers[4], Tpowers[2], Tpowers[6], d_A, d_B, d_C, n, multiply_total_time, stream1);
-    //matrix_Multiply_With_Streams(handle2, Tpowers[4], Tpowers[4], Tpowers[8], d_A, d_B, d_C, n, multiply_total_time, stream2);
     matrix_Multiply(handle, Tpowers[4], Tpowers[2], Tpowers[6], d_A, d_B, d_C, n, multiply_total_time);
     matrix_Multiply(handle, Tpowers[4], Tpowers[4], Tpowers[8], d_A, d_B, d_C, n, multiply_total_time);
 
@@ -607,15 +599,20 @@ int main(){
     s = fmax(ceil(log2(eta5 / theta[4])), 0);
     
     cudaMemset(d_A, 0, n*n*sizeof(cuDoubleComplex));
+    cudaMemset(d_C, 0, n*n*sizeof(cuDoubleComplex));
     cudaMemcpy(d_A, A, n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
 
     // Kernel is very fast, mem copies lead to longer runtime then using CPU cblas matrix scalar
- 
+
     cudaMemcpy(d_A, A, n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
     scale_tester(handle, d_A, NULL, d_C, make_cuDoubleComplex(1 / pow(2, s), 0), n, scale_total_time);
     cudaMemcpy(A, d_C, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 
+  
+    cudaDeviceSynchronize();
+    
     s = s + ell(A, temp_new, d_A, error_coefficients[4], 13, n, scale_total_time,  handle2, stream2);
+    
 
     // Attempt to calculate s without leaving the GPU
 
@@ -659,6 +656,7 @@ int main(){
     get_pade_coefficients(c, m_val);
     
     set_Identity_New(identity_new, n);
+
     if (m_val == 3 || m_val == 5 || m_val == 7 || m_val == 9) {
 
     	int strt = sizeof(Tpowers) + 2;
@@ -689,7 +687,7 @@ int main(){
     // Keep result on GPU without copy after the multiplication
 
     if (m_val == 13) {
-        
+    
         // Bind the CUDA streams to CUBLAS handles for asynchronous work:
         cublasSetStream(handle2, stream2);
         cublasSetStream(handle3, stream3);
@@ -724,6 +722,7 @@ int main(){
         cudaMemcpyAsync(d_B, Tpowers[1], n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice, stream2);
         matrix_Multiply_Reduced(handle, d_C, d_B, d_A, n, multiply_total_time);
         cudaMemcpy(U_new, d_A, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+
     
         // CALCULATE V:
         cudaMemcpyAsync(d_A, Tpowers[6], n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice, stream2);
@@ -761,37 +760,43 @@ int main(){
         cudaMemcpy(d_A, U_new, n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice); 
         matrix_subtract_Tester(handle, d_C, d_A, d_B, n);
         cudaMemcpy(V_new, d_B, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+  
         
         // CALCULATE F:
-        scale_tester(handle, d_A, NULL, d_A,  make_cuDoubleComplex(c[0], 0), n, scale_total_time);
+        scale_tester(handle, d_A, NULL, d_A,  make_cuDoubleComplex(2, 0), n, scale_total_time);
         cudaMemcpy(U_new, d_A, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 
         clock_t inverse_begin = clock();
-        cudaMemcpy(d_C, identity_new, n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
-        InverseOfMatrix_Alternative_Two(d_B, d_C, n);
-        cudaMemcpy(temp_2_new, d_C, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+    
+        InverseOfMatrix_Alternative_Three(V_new, temp_2_new, n, identity_new);
 
         clock_t inverse_end = clock();
         double inverse_total_time = (double)(inverse_end - inverse_begin) / CLOCKS_PER_SEC;
 
+        cudaMemcpy(d_C, temp_2_new, n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
+        memset(temp_new, 0, n * n * sizeof(cuDoubleComplex));
+        cudaMemset(d_B, 0, n * n * sizeof(cuDoubleComplex));
         matrix_Multiply_Reduced(handle, d_C, d_A, d_B, n, multiply_total_time);
+        memset(temp_new, 0, n * n * sizeof(cuDoubleComplex));
+
+        cudaMemcpy(temp_new, d_B, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+           
         cudaMemcpy(d_A, identity_new, n*n*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
         matrix_add_Tester(handle, d_B, d_A, d_C, n);  
         cudaMemcpy(temp_new, d_C, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+
  
         // SQUARE MATRIX F, S TIMES:
         clock_t square_begin = clock();
         matrix_Square_Reduced(handle, d_C, d_A, n, multiply_total_time, s);
-        cudaMemcpy(temp_2_new, d_A, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+
+        cudaMemcpy(X, d_A, n*n*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
         clock_t square_end = clock();
         double square_total_time = (double)(square_end - square_begin) / CLOCKS_PER_SEC;
 
         // PERFORMANCE OUTPUT:
         clock_t end = clock();
         double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;	// End recording expm execution
-
-        printf("******************\n");
-        printf("%.15lf\n", temp_2_new[22].x);
       
         printf("\n----------------------- MATRIX OPERATIONS PERCENTAGE BREAKDOWN -----------------------\n");
         printf("\n TOTAL TIME ELAPSED: %lf seconds \n", time_spent);
@@ -801,6 +806,9 @@ int main(){
         printf("\n SCALE: %lf%% \n", (scale_total_time[0]/time_spent)*100);
         printf("\n MULTIPLY: %lf%% \n", (multiply_total_time[0]/time_spent)*100);
         printf("\n SQUARE: %lf%% \n\n", (square_total_time/time_spent)*100);
+
+        // WRITE MATRIX EXPONENTIAL TO FILE:
+        matrix_complex_write(X, n);
 
     }
 
@@ -818,7 +826,7 @@ int main(){
     cudaFree(d_B);
     cudaFree(d_C);
 
-    return 0;
+    return X;
 }
 
 // Resources
