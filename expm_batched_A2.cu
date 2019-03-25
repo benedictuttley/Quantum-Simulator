@@ -1,4 +1,4 @@
-//17/03/2019 ***
+//25/03/2019 ***
 // Attempt at a batched implementation of expm for smaller matrices that can be computed in parallel (as much as is possible)
 // This can be used to find the propegator for each time step that are then suummeed to find the complete system propegator
 // to describe the whole evolution of the system over the specified time frame.
@@ -35,6 +35,7 @@
 #include "expm.h"
 #include <stdbool.h>
 
+#define BLOCK_SIZE 32
 
 // *** CURRENT AIM: REMOVE DEPENDENCIES SO HOST ARRRAYS CAN BE REMOVED ***
 
@@ -66,8 +67,34 @@ __global__ void absolute_kernel(cuDoubleComplex* A, int dim){
 
 }
 
-__global__ void norm_1_kernel(cuDoubleComplex* A, int dim, double* res){
+// This version only works for small matrices that can fit into shared memory:
+__global__ void norm_1_kernel_small(cuDoubleComplex* A, int dim, double* res){
     extern __shared__ double s[];   // Shared memory array to store column sums, size set in <<<>>>
+
+    const int tid_x = blockDim.x*blockIdx.x + threadIdx.x;
+
+    double sum = 0; // Private variable to hold column sum
+
+    for (int i = 0; i < dim; ++i)   // Calculate column sums, one column per thread
+        {
+            sum += cuCabs(A[(i*dim) + tid_x]);
+        }
+        s[tid_x] = sum;
+
+        __syncthreads(); // sum contains the column sums
+
+    if (tid_x == 0) // Calculate the max column sum using thread 0
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            if(res[0] < s[i])
+                res[0] = s[i];
+        }
+    }
+}
+
+__global__ void norm_1_kernel_large(cuDoubleComplex* A, int dim, double* res){
+    extern __device__ double s[];   // Shared memory array to store column sums, size set in <<<>>>
 
     const int tid_x = blockDim.x*blockIdx.x + threadIdx.x;
 
@@ -105,10 +132,43 @@ void matrix_complex_print(cuDoubleComplex* A, int network_size){
 }
 
 
+void write_input_matrix(cuDoubleComplex *A, int n) {
+    FILE *f;
+    f = fopen("/home/c1673666/expm_Cuda/cuda/Quantum-Simulator/CUDA_INPUT.txt", "w");
+    if (f == NULL) {
+        printf("Error opening file!\n");
+        exit(1);
+    }
+
+    for (int j = 0; j < n; ++j) {
+        for (int i = 0; i < n; ++i) {
+
+            if (i == n - 1) {
+                if (A[(n * j) + i].x == INFINITY) {
+                    fprintf(f, "Inf");
+                } else {
+                    fprintf(f, "%lf", A[(j*n) + i].x );
+                    fprintf(f, "+");
+                    fprintf(f, "%lfi ", A[(j*n) + i].y );
+                }
+            } else {
+                if (A[(n * j) + i].x == INFINITY) {
+                    fprintf(f, "Inf ");
+                } else {
+                        fprintf(f, "%lf", A[(j*n) + i].x );
+                        fprintf(f, "+");
+                        fprintf(f, "%lfi ", A[(j*n) + i].y );;
+                    }
+                }
+            }
+            fprintf(f, "\n");
+        }
+    }
+
 void set_Identity(cuDoubleComplex* A, int dim){
-    int dimensions = (int) ceil(16/dim);
+    int dimensions = (int) ceil((float)(BLOCK_SIZE/dim));
     dim3 dimGrid(dimensions, dimensions, 1); // Set a grid of 2*2 blocks
-    dim3 dimBlock(16,16,1); // Set each block to be 2*2 threads
+    dim3 dimBlock(BLOCK_SIZE,BLOCK_SIZE,1); // Set each block to be 2*2 threads
     identity_kernel<<<dimGrid, dimBlock>>>(A, dim);
     cudaDeviceSynchronize();
 
@@ -152,15 +212,13 @@ void scale_and_add_complete(cublasHandle_t handle, cuDoubleComplex* d_A, cuDoubl
     cublasZgeam(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, alpha, d_A, n, beta, d_B, n, d_C, n);
 }
 
-
-
 // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
 // <<<>>> in here place [1] The number of thread blocks in the grid, [2] The number of threads per thread block
 // Works for small matrices where the simension does not exceed the block size (due to use of shared memory);
 double matrix_1_norm(cuDoubleComplex* d_A, cudaStream_t my_stream, int dim){
-    int dimensions = (int) ceil(dim/2);
+    int dimensions = ceil((float) dim/BLOCK_SIZE);
     dim3 dimGrid(dimensions, 1, 1); // Set a grid of 2*2 blocks
-    dim3 dimBlock(32,1,1); // Set each block to be 2*2 threads
+    dim3 dimBlock(BLOCK_SIZE, 1, 1); // Set each block to be 2*2 threads
     printf("THE NUMBER OF BLOCKS IS: (%d, %d)\n", dimensions, dimensions);
     printf("THE NUMBER OF THREADS PER BLOCK IS: (%d, %d)\n",2, 2);
 
@@ -168,7 +226,11 @@ double matrix_1_norm(cuDoubleComplex* d_A, cudaStream_t my_stream, int dim){
     double* d_res;
     cudaMalloc(&d_res,sizeof(double));
     res = (double*)malloc(sizeof(double));
-    norm_1_kernel<<<dimGrid, dimBlock, dim*sizeof(double), my_stream>>>(d_A, dim, d_res);
+    // Selct the norm kernel to use based on matrix size:
+    if(dim <= BLOCK_SIZE)
+        norm_1_kernel_small<<<dimGrid, dimBlock, dim*sizeof(double), my_stream>>>(d_A, dim, d_res); // Uses shared memory
+    else
+        norm_1_kernel_large<<<dimGrid, dimBlock, dim*sizeof(double), my_stream>>>(d_A, dim, d_res); // Uses global memory
     cudaDeviceSynchronize();
     cudaMemcpy(res, d_res, sizeof(double), cudaMemcpyDeviceToHost);
     printf("ONE NORM IS: %lf\n", res[0]);
@@ -185,8 +247,7 @@ void Inverse_Batched(cublasHandle_t handle, cuDoubleComplex** d_A, cuDoubleCompl
     // Create a cublas status object
     cublasStatus_t status;
     status = cublasCreate(&my_handle);
-
-     
+  
     cudaMalloc(&dLUPivots_ALT, dim * sizeof(int)), "Failed to allocate dLUPivots!";
     cudaMalloc(&dLUInfo_ALT, sizeof(int)), "Failed to allocate dLUInfo!";
 
@@ -209,6 +270,8 @@ void Inverse_Batched(cublasHandle_t handle, cuDoubleComplex** d_A, cuDoubleCompl
     else
         printf("BATCH LU DECOMPOSITION WAS SUCCESSFUL!\n");
 }
+
+void Inverse_Batched_Small(){}
 
 
 
@@ -276,12 +339,11 @@ void matrix_Absolute_New(cuDoubleComplex *a, cuDoubleComplex *b, int n) {
 
 // Calulate the absolute values of the entries of a complex matrix: 
 void absolute(cuDoubleComplex* d_A, int dim){
-    int dimensions = (int) ceil(16/dim);
+    int dimensions = ceil((float) dim/BLOCK_SIZE);
     dim3 dimGrid(dimensions, dimensions, 1); // Set a grid of 2*2 blocks
-    dim3 dimBlock(16,16,1); // Set each block to be 2*2 threads
+    dim3 dimBlock(BLOCK_SIZE,BLOCK_SIZE,1); // Set each block to be 2*2 threads
     printf("THE NUMBER OF BLOCKS IS: (%d, %d)\n", dimensions, dimensions);
-    printf("THE NUMBER OF THREADS PER BLOCK IS: (%d, %d)\n",2, 2);
-
+    printf("THE NUMBER OF THREADS PER BLOCK IS: (%d, %d)\n",BLOCK_SIZE, BLOCK_SIZE);
     absolute_kernel<<<dimGrid, dimBlock>>>(d_A, dim);
     cudaDeviceSynchronize();
 }
@@ -306,13 +368,17 @@ double ell(cublasHandle_t handle, cuDoubleComplex* d_A, double coeff, int m_val,
     cudaMalloc(&mine, dim*dim*sizeof(cuDoubleComplex));
     cudaMemcpy(mine, d_A, dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     absolute(mine, dim);
-
+    printf("m is %d\n", m_val);
     p = pow(coeff, (1.0 / (2 * m_val + 1)));
+
     scale_tester(handle, mine, mine, make_cuDoubleComplex(p, 0), dim);
-    norm_one = matrix_1_norm(d_A, 0, dim);
-    norm_two = matrix_1_norm(mine, 0, dim);
+    norm_one = matrix_1_norm(mine, 0, dim);
+    printf("NORM ONE IS: %lf \n", norm_one);
+    norm_two = matrix_1_norm(d_A, 0, dim);
+    printf("NORM TWO IS: %lf \n", norm_two);
     
     alpha = norm_one / norm_two;
+    printf("ALPHA IS: %lf \n", alpha);
     output = fmax(ceil(log2((2 * alpha) / 2.220446049250313e-16) / (2 * m_val)), 0);
     return output;
   }
@@ -354,58 +420,46 @@ int main(int argc, char* argv[])
 
 /////////////////////////////////////////////////////////////////////////////////////////////////// SETUP START /////////////////////////////////////////////////////////////////////////////////////////////
 	int dim = 2;
-	int batch_count = 250;
+	int batch_count = 9;
  
     // Allocate host array A to construct input matrix:
-    cuDoubleComplex **A;
-    A = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
-    for(int i=0; i<batch_count; i++) {
-        A[i] = (cuDoubleComplex*)malloc(dim*dim*sizeof(cuDoubleComplex));
-    }
- 
-
-    // Create host pointer array to device matrix storage
-    cuDoubleComplex **d_A, **d_B, **d_C, **h_d_A, **h_d_B, **h_d_C;
-    h_d_A = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
-    h_d_B = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
-    h_d_C = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
- 
-    for(int i=0; i<batch_count; i++) {
-        cudaMalloc((void**)&h_d_A[i], dim*dim*sizeof(cuDoubleComplex));
-        cudaMalloc((void**)&h_d_B[i], dim*dim*sizeof(cuDoubleComplex));
-        cudaMalloc((void**)&h_d_C[i], dim*dim*sizeof(cuDoubleComplex));
-    }
-    // Copy the host array of device pointers to the device
-    cudaMalloc((void**)&d_A, batch_count*sizeof(cuDoubleComplex*));
-    cudaMalloc((void**)&d_B, batch_count*sizeof(cuDoubleComplex*));
-    cudaMalloc((void**)&d_C, batch_count*sizeof(cuDoubleComplex*));
-    cudaMemcpy(d_A, h_d_A, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_B, h_d_B, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_C, h_d_C, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
+    cuDoubleComplex **A = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
+        for(int i=0; i<batch_count; i++) {
+            A[i] = (cuDoubleComplex*)malloc(dim*dim*sizeof(cuDoubleComplex));
+        }
  
     // INITIALIZE BATCHES WITH DUMMY DATA:
-	for (int i = 0; i< batch_count; i++) {
- 		for(int j = 0; j< dim; j++){
- 			for (int k = 0; k < dim; k++)
- 			{
- 				A[i][(dim*j) + k] = make_cuDoubleComplex(1, 1);
- 			}
+    for (int i = 0; i< batch_count; i++) {
+        for(int j = 0; j< dim; j++){
+            for (int k = 0; k < dim; k++)
+            {
+                A[i][(dim*j) + k] = make_cuDoubleComplex(i, i);
+            }
         }
- 	}
+    }
+    
+
+    // WRITE THE 5th INPUT MATRIX FOR COMPARISON WITH MATLAB:
+    write_input_matrix(A[4], dim);
+
 
     // Create cublas instance
     cublasHandle_t handle;
     cublasCreate(&handle);
  
-
+     // *** CURRENT: CLEAN AND REDUCE THESE ALLOCATIONS:
     // Create host pointer array to device matrix storage
     cuDoubleComplex **d_T1, **d_T2, **d_T4, **d_T6, **d_T8, **d_T10, **h_d_T1, **h_d_T2, **h_d_T4, **h_d_T6, **h_d_T8, **h_d_T10;
+    cuDoubleComplex **d_A, **d_B, **d_C, **h_d_A, **h_d_B, **h_d_C;
     h_d_T1 = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
     h_d_T2 = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
     h_d_T4 = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
     h_d_T6 = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
     h_d_T8 = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
     h_d_T10 = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
+    h_d_A = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
+    h_d_B = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
+    h_d_C = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
  
     for(int i=0; i<batch_count; i++) {
         cudaMalloc((void**)&h_d_T1[i], dim*dim*sizeof(cuDoubleComplex));
@@ -415,6 +469,7 @@ int main(int argc, char* argv[])
         cudaMalloc((void**)&h_d_T8[i], dim*dim*sizeof(cuDoubleComplex));
         cudaMalloc((void**)&h_d_T10[i], dim*dim*sizeof(cuDoubleComplex));
     }
+    
     // Copy the host array of device pointers to the device
     cudaMalloc((void**)&d_T1, batch_count*sizeof(cuDoubleComplex*));
     cudaMalloc((void**)&d_T2, batch_count*sizeof(cuDoubleComplex*));
@@ -428,6 +483,19 @@ int main(int argc, char* argv[])
     cudaMemcpy(d_T6, h_d_T6, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
     cudaMemcpy(d_T8, h_d_T8, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
     cudaMemcpy(d_T10, h_d_T10, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
+    for(int i=0; i<batch_count; i++) {
+        cudaMalloc((void**)&h_d_A[i], dim*dim*sizeof(cuDoubleComplex));
+        cudaMalloc((void**)&h_d_B[i], dim*dim*sizeof(cuDoubleComplex));
+        cudaMalloc((void**)&h_d_C[i], dim*dim*sizeof(cuDoubleComplex));
+    }
+
+    // Copy the host array of device pointers to the device
+    cudaMalloc((void**)&d_A, batch_count*sizeof(cuDoubleComplex*));
+    cudaMalloc((void**)&d_B, batch_count*sizeof(cuDoubleComplex*));
+    cudaMalloc((void**)&d_C, batch_count*sizeof(cuDoubleComplex*));
+    cudaMemcpy(d_A, h_d_A, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, h_d_B, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_C, h_d_C, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
 
 
     // Copy host batch to device memory:
@@ -543,6 +611,7 @@ int main(int argc, char* argv[])
     
   }
 
+
   // PRINT A SAMPLE
   printf("\n");
   printf("%lf", d4[1]);
@@ -614,7 +683,8 @@ int main(int argc, char* argv[])
   printf("%d", m_val[3]);
   printf("\n");
   printf("%d\n", m_val[4]);
-  
+
+
 
 // [PART 5] CALULATE s
   double* s = (double*) malloc(batch_count*sizeof(double)); 
@@ -623,11 +693,14 @@ int main(int argc, char* argv[])
   for (int i = 0; i < batch_count; i++)
   {
     s[i] = fmax(ceil(log2(eta5[i]/theta[4])), 0);
+    printf("--->%lf\n", s[4]);
     scale_tester(handle, h_d_A[i], h_d_A[i], make_cuDoubleComplex(1/pow(2, s[i]), 0), dim);
+
     s[i] = s[i] + ell(handle, h_d_A[i], error_coefficients[4], 13, dim);
     if(s[i] > max)
         max = s[i];
 }
+printf("%lf\n", s[4] );
 
 // [PART 6] S CHECK AND M CHECK - [TODO]
 
@@ -666,6 +739,14 @@ for (int i = 0; i < batch_count; i++)
   get_pade_coefficients(c[i], m_val[i]);
 }
 
+
+for (int i = 0; i < batch_count; i++)
+{
+    if(m_val[i] != 13){
+        printf("DIFFERENCE IS SEEN!\n");
+        exit(0);
+    }
+}
 
 //if (m_val == 13) // Will need to seperate matrices that are not satisfied for batching to commence
 
@@ -717,7 +798,6 @@ for (int i = 0; i < batch_count; i++)
 
   cudaDeviceSynchronize();
     
-    // Copy each device result to the host
 
 
 
@@ -741,7 +821,8 @@ for (int i = 0; i < batch_count; i++)
                       batch_count);
 
   cudaDeviceSynchronize();
-
+      // Copy each device result to the host
+ // Copy each device result to the host
 
 
 for (int i = 0; i < batch_count; i++)
@@ -754,9 +835,18 @@ for (int i = 0; i < batch_count; i++)
     scale_and_add(handle, h_d_T2[i], h_d_B[i], h_d_B[i], make_cuDoubleComplex(c[i][0], 0), dim);
     scale_and_add(handle, h_d_A[i], h_d_B[i], h_d_B[i], make_cuDoubleComplex(1, 0), dim);
 
+
+
+
+
     // CALCULATE (V-U):
     scale_and_subtract(handle, h_d_B[i], h_d_C[i], h_d_B[i], make_cuDoubleComplex(1, 0), dim);
+        if(i == 4){
+    cublasGetMatrix(dim, dim, sizeof(cuDoubleComplex), h_d_B[i], dim, A[i], dim); // Output batch stored in A
+    matrix_complex_print(A[4], dim);
 }
+}
+
 
 // [PART 11] CALCULATE F:
 
@@ -786,11 +876,13 @@ for (int i = 0; i < batch_count; i++){
   for(int i=0; i<batch_count; i++) {
       set_Identity(h_d_C[i], dim);
       scale_and_add(handle, h_d_B[i], h_d_C[i], h_d_B[i], make_cuDoubleComplex(1, 0), dim);
+
     }
 
 
   // SQUARING PHASE:
   for (int k = 0; k < max; k++) {
+    printf("max is %lf", max);
   // PERFORM BATCH MATRIX MULTIPLICATION
   cublasZgemmBatched(handle,
                       CUBLAS_OP_N, CUBLAS_OP_N,
@@ -805,7 +897,16 @@ for (int i = 0; i < batch_count; i++){
   cudaDeviceSynchronize();
 
 for(int i=0; i<batch_count; i++) {
-    if (k<=s[i]){
+    
+    if (k<s[i]-1){
+       printf("s is: %lf \n", s[i]);
+    if(i == 4){
+    cublasGetMatrix(dim, dim, sizeof(cuDoubleComplex), h_d_C[i], dim, A[i], dim); // Output batch stored in A
+    matrix_complex_print(A[i], dim);
+     printf("--->%lf\n", s[i] );
+    }
+     printf("%d\n", k );
+        printf("%lf\n", s[i] );
     cudaMemcpy(h_d_B[i], h_d_C[i], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     }
 }
@@ -816,8 +917,9 @@ for(int i=0; i<batch_count; i++) {
     cublasGetMatrix(dim, dim, sizeof(cuDoubleComplex), h_d_C[i], dim, A[i], dim); // Output batch stored in A
   }
 
-  printf("EXPM RESULT IS: \n");
-  matrix_complex_print(A[1], dim);// Clean up resources
+  printf("EXPM RESULT FOR 5TH IN BATCH IS: \n");
+  matrix_complex_print(A[4], dim);// Clean up resources
+
  
     for(int i=0; i<batch_count; i++) {
         free(A[i]);
