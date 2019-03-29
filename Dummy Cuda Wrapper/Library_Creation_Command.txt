@@ -1,0 +1,3 @@
+CUDA LIBRARY CREATION: 
+nvcc --shared -Xcompiler -fPIC -shared new.cu -o ctestcuda.a
+
