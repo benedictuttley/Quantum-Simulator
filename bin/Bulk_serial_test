@@ -1,0 +1,17 @@
+#!/bin/bash
+# Bash script to test performance and accuracy of C expm (utilising openBLAS & LAPACK) compared to Pythons numpy expm
+
+# compile the C expm shared library:
+gcc --shared -fPIC -shared ../serial_expm_linked.c -o ctestcuda.a -I /opt/OpenBLAS/include/  -L/opt/OpenBLAS/lib -llapack -lopenblas -O3 # Linking to openBLAS & LAPACK libraries
+
+# Create file and containing folder holding results:
+touch Bulk_Results_Serial.txt
+results_filename="Bulk_Results_Serial.txt"
+> $results_filename
+
+# Loop through increasing matrix sizes:
+for length in 10 100 1000
+do
+	python3 ../first.py $length $results_filename  # Run
+
+done
