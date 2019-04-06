@@ -25,7 +25,7 @@ __global__ void ell_kernel(cuDoubleComplex* A, cuDoubleComplex* B, int dim, int*
  extern __device__ double s_nrm_two[];   // Device memory array to store column sums 
 
     const int tid_x = blockDim.x*blockIdx.x + threadIdx.x;
-
+    if(tid_x < dim){
      double sum_nrm_one = 0; // Private variable to hold column sum
      double sum_nrm_two = 0; // Private variable to hold column sum
 
@@ -36,7 +36,7 @@ __global__ void ell_kernel(cuDoubleComplex* A, cuDoubleComplex* B, int dim, int*
         }
         s_nrm_one[tid_x] = sum_nrm_one;
         s_nrm_two[tid_x] = sum_nrm_two;
-
+    }
         __syncthreads(); // sum contains the column sums
 
     if(tid_x == 1){
@@ -98,10 +98,10 @@ __global__ void absolute_kernel(cuDoubleComplex* A, int dim){
     const int tid_x = blockDim.x*blockIdx.x + threadIdx.x;
     const int tid_y = blockDim.y*blockIdx.y + threadIdx.y;
 
-
+    if(tid_x < dim && tid_y < dim){ // Check the problem bounds
     A[(dim*tid_y) + tid_x].x = cuCabs((A[(dim*tid_y) + tid_x]));
             A[(dim*tid_y) + tid_x].y = 0;
-
+    }
 
 }
 
@@ -112,6 +112,7 @@ __global__ void norm_1_kernel_small(cuDoubleComplex* A, int dim, double* res){
     const int tid_x = blockDim.x*blockIdx.x + threadIdx.x;
 
     double sum = 0; // Private variable to hold column sum
+
 
     for (int i = 0; i < dim; ++i)   // Calculate column sums, one column per thread
         {
@@ -139,13 +140,13 @@ __global__ void get_one_norm( cuDoubleComplex* A,  double* res, int k, int dim){
     const int tid_x = blockDim.x*blockIdx.x + threadIdx.x;
 
      double sum = 0; // Private variable to hold column sum
-
+     if(tid_x < dim){ // Check the problem bounds
     for (int i = 0; i < dim; ++i)   // Calculate column sums, one column per thread
         {
             sum += cuCabs(A[(i*dim) + tid_x]);
         }
         s[tid_x] = sum;
-
+        }
         __syncthreads(); // sum contains the column sums
 
     if (tid_x == 0) // Calculate the max column sum using thread 0
@@ -282,11 +283,13 @@ void Inverse_Batched(cublasHandle_t handle, cuDoubleComplex** d_A, cuDoubleCompl
     status = cublasCreate(&my_handle);
   
     cudaMalloc(&dLUPivots_ALT, dim * sizeof(int)), "Failed to allocate dLUPivots!";
-    cudaMalloc(&dLUInfo_ALT, sizeof(int)), "Failed to allocate dLUInfo!";
+    cudaMalloc(&dLUInfo_ALT, batch_count*sizeof(int)), "Failed to allocate dLUInfo!";
+
 
     // Perform the LU factorization for each matrix in the batch:
-    status = cublasZgetrfBatched(handle, dim, d_A, dim, dLUPivots_ALT, dLUInfo_ALT, batch_count);
+    status = cublasZgetrfBatched(my_handle, dim, d_A, dim, dLUPivots_ALT, dLUInfo_ALT, batch_count);
     cudaDeviceSynchronize();
+    
     if(status != CUBLAS_STATUS_SUCCESS)
         printf("BATCH LU DECOMPOSITION WAS NOT SUCCESSFUL!\n");
     else
@@ -294,7 +297,7 @@ void Inverse_Batched(cublasHandle_t handle, cuDoubleComplex** d_A, cuDoubleCompl
 
     // Solve linear system to get inverse [(LU)^-1]
     // Note there is no need to create the identity when using getri
-    status = cublasZgetriBatched(handle, dim,  (const cuDoubleComplex**)d_A, dim, (const int*) dLUPivots_ALT, inverse, dim, dLUInfo_ALT, batch_count);
+    status = cublasZgetriBatched(my_handle, dim,  (const cuDoubleComplex**)d_A, dim, (const int*) dLUPivots_ALT, inverse, dim, dLUInfo_ALT, batch_count);
     cudaDeviceSynchronize();
     if(status != CUBLAS_STATUS_SUCCESS){
         printf("BATCH LU DECOMPOSITION WAS NOT SUCCESSFUL!\n");
@@ -368,7 +371,7 @@ int main(int argc, char* argv[])
 {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////// SETUP START /////////////////////////////////////////////////////////////////////////////////////////////
-	int dim = 5;
+	int dim = 2;
 	int batch_count = 100;
  
     // Allocate host array A to construct input matrix:
@@ -382,7 +385,7 @@ int main(int argc, char* argv[])
         for(int j = 0; j< dim; j++){
             for (int k = 0; k < dim; k++)
             {
-                A[i][(dim*j) + k] = make_cuDoubleComplex(i,1);
+                A[i][(dim*j) + k] = make_cuDoubleComplex(i,0);
             }
         }
     }
@@ -591,6 +594,7 @@ for (int i = 0; i < batch_count; i++) // 1-norm needs work
   get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), streams[3]>>>(h_d_T8[i], d_res3, i, dim); // Uses global memory
   get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), streams[4]>>>(h_d_T10[i], d_res4, i, dim);
 }
+
 cudaMemcpyAsync(d4, d_res, sizeof(double)*batch_count, cudaMemcpyDeviceToHost, streams[1]);
 cudaMemcpyAsync(d6, d_res2, sizeof(double)*batch_count, cudaMemcpyDeviceToHost, streams[2]);
 cudaMemcpyAsync(d8, d_res3, sizeof(double)*batch_count, cudaMemcpyDeviceToHost, streams[3]);
@@ -654,9 +658,10 @@ dim3 dimGrid_alt(dimensions_alt, dimensions_alt, 1); // Set a grid of 2*2 blocks
 dim3 dimBlock_alt(BLOCK_SIZE,BLOCK_SIZE,1); // Set each block to be 2*2 threads
 
 int* d_m_val;
-cudaMalloc(&d_m_val, sizeof(double)*batch_count);
+cudaMalloc(&d_m_val, sizeof(int)*batch_count);
 
 // CHECK FOR m_val = 3:
+//  Note: Problem is cipying doubles to ints
 for (int i = 0; i < batch_count; i++) // 1-norm needs work
     {
 
@@ -669,8 +674,11 @@ for (int i = 0; i < batch_count; i++) // 1-norm needs work
             ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), streams[i%3]>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 3);
         }
     }
+
 cudaDeviceSynchronize();
-cudaMemcpy(m_val, d_m_val, sizeof(double)*batch_count, cudaMemcpyDeviceToHost);
+
+cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
+
 
 // CHECK FOR m_val = 5:
 for (int i = 0; i < batch_count; i++) // 1-norm needs work
@@ -684,7 +692,7 @@ for (int i = 0; i < batch_count; i++) // 1-norm needs work
         }
     }
 cudaDeviceSynchronize();
-cudaMemcpy(m_val, d_m_val, sizeof(double)*batch_count, cudaMemcpyDeviceToHost);
+cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 
 // CHECK FOR m_val = 7:
 for (int i = 0; i < batch_count; i++) // 1-norm needs work
@@ -698,7 +706,7 @@ for (int i = 0; i < batch_count; i++) // 1-norm needs work
         }
     }
 cudaDeviceSynchronize();
-cudaMemcpy(m_val, d_m_val, sizeof(double)*batch_count, cudaMemcpyDeviceToHost);
+cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 
 // CHECK FOR m_val = 9:
 printf("-----------------------------------------------\n");
@@ -713,8 +721,7 @@ for (int i = 0; i < batch_count; i++) // 1-norm needs work
         }
     }
 cudaDeviceSynchronize();
-cudaMemcpy(m_val, d_m_val, sizeof(double)*batch_count, cudaMemcpyDeviceToHost);
-
+cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 ///////////////////////////////////////////// ALTERNATIVE ELL PART A ////////////////////////////////////////////////////
 
 
@@ -835,12 +842,12 @@ for (int i = 0; i < batch_count; i++)
 
   // [PART 8] CALCULATE U
 
-  cudaMemset(h_d_C, 0, dim*dim*sizeof(cuDoubleComplex)*batch_count);
+  //cudaMemset(h_d_C, 0, dim*dim*sizeof(cuDoubleComplex)*batch_count);
 
                                                   // >>> IDENTITY SET
     cublasSetStream(handle2, streams[2]);
     set_Identity(h_d_identity[0], dim, streams[1]);   
-
+//exit(0);
    for (int i = 0; i < batch_count; i++)
    {
     scale_and_add_alt(handle2, h_d_T6[i], h_d_C[i], h_d_C[i], make_cuDoubleComplex(c[i][13], 0), dim); // >>> SCALING
@@ -849,6 +856,7 @@ for (int i = 0; i < batch_count; i++)
 }
 
 cudaDeviceSynchronize();
+
 
 // Perform batch matrix multiplication
   cublasZgemmBatched(handle,                                                    // >>> BATCH MATRIX MULTILICATION
@@ -862,6 +870,7 @@ cudaDeviceSynchronize();
                       batch_count);
 
   cudaDeviceSynchronize();
+
   for (int i = 0; i < batch_count; i++)
   {
 
@@ -872,7 +881,6 @@ cudaDeviceSynchronize();
     scale_and_add(handle, h_d_C[i], h_d_B[i], h_d_B[i], make_cuDoubleComplex(1, 0), dim, 0);
 
   }
-
 
 
   // BATCH MATRIX MULTIPLY:
@@ -910,7 +918,9 @@ cudaDeviceSynchronize();
 
   cudaDeviceSynchronize();
                                         
-cudaMemset(h_d_B, 0, dim*dim*sizeof(cuDoubleComplex)*batch_count);
+
+
+
 for (int i = 0; i < batch_count; i++)
   {  
     scale_and_add(handle, h_d_T6[i], h_d_B[i], h_d_B[i], make_cuDoubleComplex(c[i][6], 0), dim, 0); // >>> SCALING
@@ -986,8 +996,23 @@ for (int i = 0; i < batch_count; i++){
 
  printf("ANS IS: \n");
  matrix_complex_print(A[5], dim);
+
+// Scale operations are compute bound and no advantage being gained from batch parallelism
+
+// free Memory:
+cudaFree(h_d_T1);
+cudaFree(h_d_T2);
+cudaFree(h_d_T4);
+cudaFree(h_d_T6);
+cudaFree(h_d_T8);
+cudaFree(h_d_T10);
+cudaFree(h_d_A);
+cudaFree(h_d_B);
+cudaFree(h_d_C);
+cudaFree(h_d_identity);
+
+
  return 0;
 }
 
 
-// Scale operations are compute bound and no advantage being gained from batch parallelism
