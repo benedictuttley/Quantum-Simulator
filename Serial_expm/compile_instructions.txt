@@ -1,0 +1,5 @@
+Serial_C and Python Compilation
+-------------------------------
+gcc --shared -fPIC -shared serial_expm_linked.c -o ctestcuda.a -I /opt/OpenBLAS/include/  -L/opt/OpenBLAS/lib -llapack -lopenblas  -O3
+
+

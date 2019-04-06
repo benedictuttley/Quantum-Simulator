@@ -1,0 +1,18 @@
+*** New Entry ***
+ Matrix Size:10
+ Numpy expm runtime: 0.0008146762847900391
+ C expm runtime: 0.006448507308959961
+ Agreement(1e-12 tolerance): True
+
+*** New Entry ***
+ Matrix Size:100
+ Numpy expm runtime: 0.007284879684448242
+ C expm runtime: 0.014547109603881836
+ Agreement(1e-12 tolerance): True
+
+*** New Entry ***
+ Matrix Size:1000
+ Numpy expm runtime: 2.585557222366333
+ C expm runtime: 2.7799789905548096
+ Both contain NaN entries 
+
