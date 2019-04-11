@@ -1,0 +1,168 @@
+*** New Entry ***
+ (Batch Size:10, Matrix Size:4) 
+ Numpy expm runtime: 0.0077991485595703125seconds.
+ CUDA expm runtime: 0.22969603538513184 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:10, Matrix Size:8) 
+ Numpy expm runtime: 0.008942604064941406seconds.
+ CUDA expm runtime: 0.23069119453430176 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:10, Matrix Size:16) 
+ Numpy expm runtime: 0.012779474258422852seconds.
+ CUDA expm runtime: 0.22279620170593262 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:10, Matrix Size:32) 
+ Numpy expm runtime: 0.0175321102142334seconds.
+ CUDA expm runtime: 0.22679734230041504 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:50, Matrix Size:4) 
+ Numpy expm runtime: 0.020141124725341797seconds.
+ CUDA expm runtime: 0.22887682914733887 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:50, Matrix Size:8) 
+ Numpy expm runtime: 0.030444622039794922seconds.
+ CUDA expm runtime: 0.2320389747619629 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:50, Matrix Size:16) 
+ Numpy expm runtime: 0.043717145919799805seconds.
+ CUDA expm runtime: 0.23164987564086914 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:50, Matrix Size:32) 
+ Numpy expm runtime: 0.06850171089172363seconds.
+ CUDA expm runtime: 0.2516617774963379 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:100, Matrix Size:4) 
+ Numpy expm runtime: 0.03410935401916504seconds.
+ CUDA expm runtime: 0.2488391399383545 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:100, Matrix Size:8) 
+ Numpy expm runtime: 0.051519155502319336seconds.
+ CUDA expm runtime: 0.24426698684692383 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:100, Matrix Size:16) 
+ Numpy expm runtime: 0.07052850723266602seconds.
+ CUDA expm runtime: 0.2595250606536865 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:100, Matrix Size:32) 
+ Numpy expm runtime: 0.13334035873413086seconds.
+ CUDA expm runtime: 0.27577781677246094 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:150, Matrix Size:4) 
+ Numpy expm runtime: 0.04936838150024414seconds.
+ CUDA expm runtime: 0.2638852596282959 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:150, Matrix Size:8) 
+ Numpy expm runtime: 0.07707715034484863seconds.
+ CUDA expm runtime: 0.26739025115966797 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:150, Matrix Size:16) 
+ Numpy expm runtime: 0.10373497009277344seconds.
+ CUDA expm runtime: 0.27437567710876465 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:150, Matrix Size:32) 
+ Numpy expm runtime: 0.19459056854248047seconds.
+ CUDA expm runtime: 0.30208253860473633 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:200, Matrix Size:4) 
+ Numpy expm runtime: 0.08158183097839355seconds.
+ CUDA expm runtime: 0.2651989459991455 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:200, Matrix Size:8) 
+ Numpy expm runtime: 0.09829163551330566seconds.
+ CUDA expm runtime: 0.27251386642456055 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:200, Matrix Size:16) 
+ Numpy expm runtime: 0.13208413124084473seconds.
+ CUDA expm runtime: 0.29178285598754883 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:200, Matrix Size:32) 
+ Numpy expm runtime: 0.26969122886657715seconds.
+ CUDA expm runtime: 0.3301980495452881 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:250, Matrix Size:4) 
+ Numpy expm runtime: 0.09454631805419922seconds.
+ CUDA expm runtime: 0.284290075302124 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:250, Matrix Size:8) 
+ Numpy expm runtime: 0.12334179878234863seconds.
+ CUDA expm runtime: 0.2820878028869629 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:250, Matrix Size:16) 
+ Numpy expm runtime: 0.16672801971435547seconds.
+ CUDA expm runtime: 0.3059978485107422 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:250, Matrix Size:32) 
+ Numpy expm runtime: 0.3405489921569824seconds.
+ CUDA expm runtime: 0.3602182865142822 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:300, Matrix Size:4) 
+ Numpy expm runtime: 0.10990500450134277seconds.
+ CUDA expm runtime: 0.3130974769592285 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:300, Matrix Size:8) 
+ Numpy expm runtime: 0.18197894096374512seconds.
+ CUDA expm runtime: 0.3223426342010498 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:300, Matrix Size:16) 
+ Numpy expm runtime: 0.4618339538574219seconds.
+ CUDA expm runtime: 0.3260924816131592 seconds.
+ Agreement(1e-5 tolerance): True 
+
+*** New Entry ***
+ (Batch Size:300, Matrix Size:32) 
+ Numpy expm runtime: 3.7918334007263184seconds.
+ CUDA expm runtime: 0.3712022304534912 seconds.
+ Agreement(1e-5 tolerance): True 
+
