@@ -1,5 +1,5 @@
-# *** Full space simulator ***
-# *** TODO: Visulaise the density matrix ***
+# *** Multi excitation case ***
+
 import sys
 import os
 import datetime
@@ -13,72 +13,6 @@ import matplotlib.patches as patches
 import matplotlib.collections as collections
 import subprocess
 
-
-# fig11 = plt.figure(figsize=(8, 8), constrained_layout=False)
-
-# # gridspec inside gridspec
-# outer_grid = fig11.add_gridspec(8, 8, wspace=0.0, hspace=0.0)
-
-# for i in range(64):
-#     inner_grid = outer_grid[i].subgridspec(1, 1, wspace=0.0, hspace=0.0)
-#     #for j, (c, d) in enumerate(product(range(1, 2), repeat=2)):
-#     ax = plt.Subplot(fig11, inner_grid[0])
-#         #ax.plot(*squiggle_xy(a, b, c, d))
-#     #i = np.arange(0.0, 2*np.pi, 0.1)
-#         #ax.plot( np.sin(i*1)*np.cos(i*2), np.sin(i*1)*np.cos(i*1))
-#     circle1 = plt.Circle((0.5, 0.5), 0.25, color='white')
-#     style="Simple,tail_width=0.5,head_width=4,head_length=8"
-#     kw = dict(arrowstyle=style, color="k")
-#     #a1 = patches.FancyArrowPatch((0.1,0.2), (0,0.6),**kw )
-#     a1 = patches.FancyArrowPatch((0.3,0.25), (0.75,0.3),connectionstyle="arc3,rad=.5", **kw)
-#     #ax.Circle((0, 0), 0.2, color='r')
-#     circ=[]
-#     circ.append(patches.Circle ((0.5,0.5), 0.25, color='white'))
-#     coll=collections.PatchCollection(circ, zorder=-1)
-#     ax.add_collection(coll)
-
-#     #ax.add_artist(circle1)
-
-#     ax.add_patch(a1)
-#     ax.patch.set_facecolor('#228B22')
-#     ax.patch.set_alpha(abs(rho[int(np.floor(i/8))][i%8]))
-#     ax.set_xticks([])
-#     ax.set_yticks([])
-
-#     if(i < 8):
-#     	ax.set_xticks([0.5])
-#     if(i%8 == 0):
-#     	ax.set_yticks([0.5])
-#     x_ticks_labels = list_of_states
-#     y_ticks_labels = list_of_states
-#     fig11.add_subplot(ax)
-#     #ax.set_xticks(1)
-#     # Set ticks labels for x-axis
-
-#     ax.set_xticklabels(["|" + x_ticks_labels[i%8] + ">"], rotation='horizontal', fontsize=11)
-#     ax.xaxis.tick_top()
-#     ax.set_yticklabels(["|" + y_ticks_labels[int(np.floor(i/8))] + ">"], rotation='horizontal', fontsize=11)
-#     if(i%8 == int(np.floor(i/8))):
-#     	ax.text(0.0, 0.0, 'P = ' + str(round(abs(rho[int(np.floor(i/8))][i%8]),3)) , fontsize=8)
-#     else:
-#     	ax.patch.set_facecolor('red')
-#     	ax.patch.set_alpha(1)
-# all_axes = fig11.get_axes()
-
-# fig11.suptitle('Density matrix and transfer state probabilities', fontsize=16)
-# plt.show()
-
-
-# # Attempt to cascasde images to form animation:
-# fig11.savefig("test.png")
-
-# # subprocess.call([
-# # 	'ffmpeg', '-framerate', '8', '-i', 'test.png', '-r', '30', '-pix_fmt', 'yuv420p',
-# # 	'video_name.mp4'
-# # 	])
-
-
-
 # Encapsulate this in a function:
 def Visualize(rho, iterator, T):
 	fig11 = plt.figure(figsize=(8, 8), constrained_layout=False)
@@ -89,16 +23,27 @@ def Visualize(rho, iterator, T):
 		inner_grid = outer_grid[i].subgridspec(1, 1, wspace=0.0, hspace=0.0)
 		ax = plt.Subplot(fig11, inner_grid[0])
 		circle1 = plt.Circle((0.5, 0.5), 0.25, color='white')
-		style="Simple,tail_width=0.5,head_width=4,head_length=8"
+		style="Simple,tail_width=0.5,head_width=3,head_length=2"
 		kw = dict(arrowstyle=style, color="k")
-		a1 = patches.FancyArrowPatch((0.3,0.25), (0.75,0.3),connectionstyle="arc3,rad=.5", **kw)
+		style2="Simple,tail_width=0.5,head_width=0.5, head_length=8"
+		kw2 = dict(arrowstyle=style2, color="white")
+
+		# Phase:
+		theta = np.angle(rho[int(np.floor(i/8))][i%8], deg=False)
+		x = 0.5 + 0.25*np.cos(theta)
+		y = 0.5 + 0.25*np.sin(theta)
+
+		a1 = patches.FancyArrowPatch((0.5,0.5), (x,y), **kw)
+		a2 = patches.FancyArrowPatch((0.48,0.5), (0.75,0.5), **kw2)
 		circ=[]
 		circ.append(patches.Circle ((0.5,0.5), 0.25, color='white'))
 		coll=collections.PatchCollection(circ, zorder=-1)
 		
-		# Phase annotations
-		#ax.add_collection(coll)
-		#ax.add_patch(a1)
+		# Phase annotations for coherence (on non-diagonal entries)
+		if(i%8 != int(np.floor(i/8))):
+			ax.add_collection(coll)
+			ax.add_patch(a2)
+			ax.add_patch(a1)
 		
 		ax.patch.set_facecolor('#228B22')
 		ax.patch.set_alpha(abs(rho[int(np.floor(i/8))][i%8]))
@@ -114,16 +59,24 @@ def Visualize(rho, iterator, T):
 
 		ax.set_xticklabels(["|" + x_ticks_labels[i%8] + ">"], rotation='horizontal', fontsize=11)
 		ax.xaxis.tick_top()
-		ax.set_yticklabels(["|" + y_ticks_labels[int(np.floor(i/8))] + ">"], rotation='horizontal', fontsize=11)
+		ax.set_yticklabels(["<" + y_ticks_labels[int(np.floor(i/8))] + "|"], rotation='horizontal', fontsize=11)
 		if(i%8 == int(np.floor(i/8))):
-			ax.text(0.1, 0.0, 'P = ' + str(round(abs(rho[int(np.floor(i/8))][i%8]),3)) , fontsize=10)
+			ax.text(0.5, 0.5, 'matplotlib', horizontalalignment='center',verticalalignment='center', transform=ax.transAxes,text='P = ' + str(round(abs(rho[int(np.floor(i/8))][i%8]),2)) ,  size="medium",
+		 bbox=dict(boxstyle="square,pad=0.1",
+                              ec="none", facecolor='red', alpha=0.7))
 		else:
-			ax.patch.set_facecolor('#8a7b70')
-			ax.patch.set_alpha(1)
+			#ax.patch.set_facecolor('#8a7b70')
+			#ax.patch.set_alpha(1)
+			ax.patch.set_facecolor('k')
+			ax.patch.set_alpha(abs(rho[int(np.floor(i/8))][i%8]))
+			#ax.text(0.1, 0.0, 'Mag = ' + str(round(abs(rho[int(np.floor(i/8))][i%8]), 3)), fontsize=8)
+			#ax.text(0.1, 0.0, '\u03F4 = ' + str(round(np.angle(rho[int(np.floor(i/8))][i%8], True), 3)), fontsize=8)
 	all_axes = fig11.get_axes()
-	fig11.suptitle("SYSTEM STATE AT T = " + str(T) + " s", fontsize=16, horizontalalignment='center')
+	fig11.suptitle("SYSTEM STATE AT T = " + str(T), fontsize=16, horizontalalignment='center')
 	#plt.show()
-
+	
+	#print(rho)
+	#exit(0)
 	# Attempt to cascasde images to form animation:
 	fig11.savefig("file%02d.png" % iterator)
 
@@ -177,7 +130,10 @@ for T in time_steps:
 
 	# Add to the list:
 	list_of_density_matrices.append(rho)
-	# Probability of each state:
+	
+	# Probability of each state: - Diagonal elements of the density matrix equal probability of system being in the associated
+	# basis states
+
 	print("Final Probability Distribution")
 	print("------------------------------")
 	total_prob = 0
