@@ -14,12 +14,15 @@ import matplotlib.collections as collections
 import subprocess
 
 # Encapsulate this in a function:
-def Visualize(rho, iterator, T):
-	fig11 = plt.figure(figsize=(8, 8), constrained_layout=False)
+def Visualize(rho, iterator, T, Nspin):
+	print(T)
+	size = pow(2, Nspin)
+	fig11 = plt.figure(figsize=(size, size), constrained_layout=False)
 	# gridspec inside gridspec
-	outer_grid = fig11.add_gridspec(8, 8, wspace=0.0, hspace=0.0)
+	outer_grid = fig11.add_gridspec(size, size, wspace=0.0, hspace=0.0)
 
-	for i in range(64):
+	for i in range(size*size):
+		print("part 1")
 		inner_grid = outer_grid[i].subgridspec(1, 1, wspace=0.0, hspace=0.0)
 		ax = plt.Subplot(fig11, inner_grid[0])
 		circle1 = plt.Circle((0.5, 0.5), 0.25, color='white')
@@ -28,8 +31,9 @@ def Visualize(rho, iterator, T):
 		style2="Simple,tail_width=0.5,head_width=0.5, head_length=8"
 		kw2 = dict(arrowstyle=style2, color="white")
 
+
 		# Phase:
-		theta = np.angle(rho[int(np.floor(i/8))][i%8], deg=False)
+		theta = np.angle(rho[int(np.floor(i/size))][i%size], deg=False)
 		x = 0.5 + 0.25*np.cos(theta)
 		y = 0.5 + 0.25*np.sin(theta)
 
@@ -40,49 +44,48 @@ def Visualize(rho, iterator, T):
 		coll=collections.PatchCollection(circ, zorder=-1)
 		
 		# Phase annotations for coherence (on non-diagonal entries)
-		if(i%8 != int(np.floor(i/8))):
+		if(i%size != int(np.floor(i/size))):
 			ax.add_collection(coll)
 			ax.add_patch(a2)
 			ax.add_patch(a1)
 		
 		ax.patch.set_facecolor('#228B22')
-		ax.patch.set_alpha(abs(rho[int(np.floor(i/8))][i%8]))
+		ax.patch.set_alpha(abs(rho[int(np.floor(i/size))][i%size]))
 		ax.set_xticks([])
 		ax.set_yticks([])
-		if(i < 8):
+		if(i < size):
 			ax.set_xticks([0.5])
-		if(i%8 == 0):
+		if(i%size == 0):
 			ax.set_yticks([0.5])
 		x_ticks_labels = list_of_states
 		y_ticks_labels = list_of_states
 		fig11.add_subplot(ax)
 
-		ax.set_xticklabels(["|" + x_ticks_labels[i%8] + ">"], rotation='horizontal', fontsize=11)
+		ax.set_xticklabels(["|" + x_ticks_labels[i%size] + ">"], rotation='horizontal', fontsize=10)
 		ax.xaxis.tick_top()
-		ax.set_yticklabels(["<" + y_ticks_labels[int(np.floor(i/8))] + "|"], rotation='horizontal', fontsize=11)
-		if(i%8 == int(np.floor(i/8))):
-			ax.text(0.5, 0.5, 'matplotlib', horizontalalignment='center',verticalalignment='center', transform=ax.transAxes,text='P = ' + str(round(abs(rho[int(np.floor(i/8))][i%8]),2)) ,  size="medium",
+		ax.set_yticklabels(["<" + y_ticks_labels[int(np.floor(i/size))] + "|"], rotation='horizontal', fontsize=8)
+		if(i%size == int(np.floor(i/size))):
+			ax.text(0.5, 0.5, 'matplotlib', horizontalalignment='center',verticalalignment='center', transform=ax.transAxes,text='P = ' + str(round(abs(rho[int(np.floor(i/size))][i%size]),2)) ,  size="medium",
 		 bbox=dict(boxstyle="square,pad=0.1",
                               ec="none", facecolor='red', alpha=0.7))
 		else:
-			#ax.patch.set_facecolor('#8a7b70')
-			#ax.patch.set_alpha(1)
 			ax.patch.set_facecolor('k')
-			ax.patch.set_alpha(abs(rho[int(np.floor(i/8))][i%8]))
-			#ax.text(0.1, 0.0, 'Mag = ' + str(round(abs(rho[int(np.floor(i/8))][i%8]), 3)), fontsize=8)
-			#ax.text(0.1, 0.0, '\u03F4 = ' + str(round(np.angle(rho[int(np.floor(i/8))][i%8], True), 3)), fontsize=8)
+			ax.patch.set_alpha(abs(rho[int(np.floor(i/size))][i%size]))
+
 	all_axes = fig11.get_axes()
-	fig11.suptitle("SYSTEM STATE AT T = " + str(T), fontsize=16, horizontalalignment='center')
-	#plt.show()
-	
-	#print(rho)
-	#exit(0)
-	# Attempt to cascasde images to form animation:
+	fig11.suptitle("SYSTEM STATE AT T = " + str(T), fontsize=10, horizontalalignment='center')
+
+	# Save image for animation:
 	fig11.savefig("file%02d.png" % iterator)
+	plt.close(fig11)
 
 
 # Get the number of spin particles in the network
 Nspin = abs(int(sys.argv[1]))
+# Get time step information
+timeInterval_begin = abs(int(sys.argv[2]))
+timeInterval_end = abs(int(sys.argv[3]))
+increment = abs(int(sys.argv[4]))
 
 # Get the initial state
 with open('PSI(0).txt', 'r') as f:
@@ -115,10 +118,15 @@ for k in range(0,Nspin):
                             np.kron(Y,np.eye(pow(2,Nspin-l-1))) ) )
 		H=H+HM
 
+# *** DYNAMIC ***
+
 # Reference: Time optimal information transfer in spintronics networks
 list_of_density_matrices = []
-time_steps = [0.0, 0.5, 1.0, 1.5, 2.0]
-for T in time_steps:
+time_steps = []
+
+for T in range(timeInterval_begin, timeInterval_end, increment):
+	print(T)
+	time_steps.append(T)
 	# Calculate the unitary operator U(t):
 	U = sp.linalg.expm(-1j*T*H) 
 
@@ -138,6 +146,7 @@ for T in time_steps:
 	print("------------------------------")
 	total_prob = 0
 	Probability_Distribution = np.diag(abs(rho))
+	
 	for state in range(0, pow(2,Nspin)):
 		print("Probability of state: |" + str(list_of_states[state]) + ">" + " is: " + str(round(Probability_Distribution[state], 3)))
 		total_prob += Probability_Distribution[state]
@@ -148,7 +157,7 @@ for T in time_steps:
 iterator = 0
 print("Plotting Density Matrices...")
 for density_matrix in list_of_density_matrices:
-	Visualize(density_matrix, iterator, time_steps[iterator])
+	Visualize(density_matrix, iterator, time_steps[iterator], Nspin)
 	iterator+=1
 
 subprocess.call([
