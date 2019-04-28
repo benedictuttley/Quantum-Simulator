@@ -1,11 +1,11 @@
-// *** 29/03/2019 *** --> BATCHED WITH STREAMS
+// Batched cuEXPM:
 
 #include <cstdio>
 #include <cstdlib>
 #include <math.h>
 #include <time.h>
-#include <cublas_v2.h>
-#include <cuComplex.h>
+#include <cublas_v2.h> 
+#include <cuComplex.h>  // cuComplex contains cuDoubleComplex datatype used to represent complex numbers of double precision 
 
 #define BLOCK_SIZE 32
 
@@ -106,7 +106,6 @@ __global__ void get_one_norm( cuDoubleComplex* A, double* res, int k, int dim){
         }
     }
 }
-
 
 
 void matrix_complex_print(cuDoubleComplex* A, int network_size){
@@ -299,17 +298,13 @@ void get_pade_coefficients(double *buf, int m) {
 
 extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int dim, int batch_count) {
 
-    /* *** Intial setup ***
-     --------------------
-    */
-
+    // Note: Commented code is for testing on dummy matrices without linkage with Python
     // Size of matrix input:
 	// int dim = 4;
-
     // Number of matrices in the batch:
 	// int batch_count = 10;
  
-    // Allocate host memory for input arrry:
+    // Allocate host memory for input array:
     cuDoubleComplex *A = (cuDoubleComplex*)malloc(batch_count*sizeof(cuDoubleComplex*));
     A = (cuDoubleComplex*)input;
  
@@ -322,32 +317,34 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     //         }
     //     }
     // }
-    
     // Write input matrix for comparison:
     //write_input_matrix(A[5], dim);
 
-    // Create cublas instance
+    // Create cublas instance that points to the cuBLAS library context
     cublasHandle_t handle;
     cublasCreate(&handle);
     cublasHandle_t handle2;
     cublasCreate(&handle2);
- 
+    // Note: need to call destroy() 
 
-    // Create cublas instance
+    // Create new cublas streams
     cudaStream_t streams[5];
     int n_streams = 5;
     for (int i = 0; i < 5; i++) {
         cudaStreamCreate(&streams[i]);
     }
 
-    // Bind streams to handles:
+    // Set stream that will be used to execute all subsequent calls to the cuBLAS library functions:
     cublasSetStream(handle2, streams[2]);
 
 
     // Create host pointer array to device matrix storage
+    
+    //Note: Host To Device (h_d) pointers allow for specidying indexes of the double pointer from the host which is not possible with the Device To Device pointers
     cuDoubleComplex **d_T1, **d_T2, **d_T4, **d_T6, **d_T8, **d_T10, **d_A, **d_B, **d_C, **d_identity; // Device pointers to device arrays
     cuDoubleComplex **h_d_T1, **h_d_T2, **h_d_T4, **h_d_T6, **h_d_T8, **h_d_T10, **h_d_A, **h_d_B, **h_d_C, **h_d_identity; // Host pointers to device arrays
     
+
     h_d_T1 = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
     h_d_T2 = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
     h_d_T4 = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
@@ -407,7 +404,7 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     }
 
 
-    // Alpha and beta coeficients set for zgemm:
+    // Alpha and beta coeficients set for zgemm :
     const cuDoubleComplex alf = make_cuDoubleComplex(1, 0);
     const cuDoubleComplex bet = make_cuDoubleComplex(0, 0);
     const cuDoubleComplex *alpha = &alf;
@@ -416,9 +413,9 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
 
 /////////////////////////////////////////////////////////////////////////////////////////////////// SETUP END /////////////////////////////////////////////////////////////////////////////////////////////
 
-    // *** Powers of input matrices calculated using Batch ZGEMM **
+    // *** Powers of input matrices calculated using Batch ZGEMM (complex batch matrix multiplication) **
     
-    // Calulate T2:
+    // Calulate A^2 = A*A:
     cublasZgemmBatched(handle,
         CUBLAS_OP_N, CUBLAS_OP_N,
         dim, dim, dim,
@@ -430,7 +427,7 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         batch_count);
     cudaDeviceSynchronize();
 
-    // Calculate T4:
+    // Calculate A^4 = A^2*A^2:
     cublasZgemmBatched(handle,
         CUBLAS_OP_N, CUBLAS_OP_N,
         dim, dim, dim,
@@ -442,13 +439,13 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         batch_count);
     cudaDeviceSynchronize();
 
-    // Calculate T6:
+    // Calculate A^6 = A^2*A^4:
     cublasZgemmBatched(handle,
         CUBLAS_OP_N, CUBLAS_OP_N,
         dim, dim, dim,
         alpha,
-        (const cuDoubleComplex**)d_T4, dim,
         (const cuDoubleComplex**)d_T2, dim,
+        (const cuDoubleComplex**)d_T4, dim,
         beta,
         d_T6, dim,
         batch_count);
@@ -477,22 +474,19 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         batch_count);
     cudaDeviceSynchronize();
 
+
+    // purpose?
     double* d4;
     double* d6;
     double* d8;
     double* d10;
-
     cudaMallocHost((void**)&d4, batch_count*sizeof(double));
     cudaMallocHost((void**)&d6, batch_count*sizeof(double));
     cudaMallocHost((void**)&d8, batch_count*sizeof(double));
     cudaMallocHost((void**)&d10, batch_count*sizeof(double));
 
 
-    // Cuda Grid setup:
-    int dimensions = ceil((float) dim/BLOCK_SIZE);
-    dim3 dimGrid(dimensions, 1, 1); 
-    dim3 dimBlock(BLOCK_SIZE, 1, 1); 
-
+    // purpose?
     double* d_res;
     double* d_res2;
     double* d_res3;
@@ -502,7 +496,15 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     cudaMalloc((void**)&d_res3, sizeof(double)*batch_count);
     cudaMalloc((void**)&d_res4, sizeof(double)*batch_count);
 
-    // Calculate matrix norms for each powers of A for each matrix in the batch:
+
+    // Cuda device Grid setup:
+    int dimensions = ceil((float) dim/BLOCK_SIZE);
+    dim3 dimGrid(dimensions, 1, 1); 
+    dim3 dimBlock(BLOCK_SIZE, 1, 1); 
+
+
+
+    // Get one norm for each power of A for each matrix in the batch:
     for (int i = 0; i < batch_count; i++) {
         get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), streams[1]>>>(h_d_T4[i], d_res, i, dim); 
         get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), streams[2]>>>(h_d_T6[i], d_res2, i, dim); 
@@ -518,10 +520,10 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     cudaDeviceSynchronize();
 
     for (int i = 0; i < batch_count; i++) {
-        d4[i] = pow(d4[i], (1.0 / 4));
-        d6[i] = pow(d6[i], (1.0 / 6));
-        d8[i] = pow(d8[i], (1.0 / 8));
-        d10[i] = pow(d10[i], (1.0 / 10));
+        d4[i] = pow(d4[i], (1.0 / 4));      // d4 = ||A^4||^1/4
+        d6[i] = pow(d6[i], (1.0 / 6));      // d6 = ||A^2||^1/3
+        d8[i] = pow(d8[i], (1.0 / 8));      // d8 = ||A^4||^1/8
+        d10[i] = pow(d10[i], (1.0 / 10));   // d10 = ||A^10||^1/10
     }
 
     double* eta1 = (double*) malloc(batch_count*sizeof(double));
@@ -530,19 +532,23 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     double* eta5 = (double*) malloc(batch_count*sizeof(double));
     int* m_val = (int*) malloc(batch_count*sizeof(int));
 
+    // Algorithm refers to eta as n
     for (int i = 0; i < batch_count; i++) {
-        eta1[i] = fmax(d4[i], d6[i]);
-        eta3[i] = fmax(d6[i], d8[i]);
-        eta4[i] = fmax(d8[i], d10[i]);
-        eta5[i] = fmin(eta3[i], eta4[i]); 
+        eta1[i] = fmax(d4[i], d6[i]);       // n2 = max(d4, d6)
+        eta3[i] = fmax(d6[i], d8[i]);       // n3 = max(d6, d8)
+        eta4[i] = fmax(d8[i], d10[i]);      // n4 = max(d8, d10)
+        eta5[i] = fmin(eta3[i], eta4[i]);   // n5 = min(n3,n4)
     }
 
-    // *** Find value of m_val from set {3, 5, 7, 9, 13}
+    // *** This section finds the degree m of pade approximant to use where m can take the value [3,5,7,9,13] ***
 
+    // Array containing values of theta for each value degree m of pade approximant
    double theta[5] = {
-        1.495585217958292e-002, 2.539398330063230e-001,
-        9.504178996162932e-001, 2.097847961257068e+000,
-        5.371920351148152e+000
+        1.495585217958292e-002, // theta3
+        2.539398330063230e-001, // theta5
+        9.504178996162932e-001, // theta7
+        2.097847961257068e+000, // theta9
+        5.371920351148152e+000  // theta13
     };
 
     double error_coefficients[5] = {
@@ -552,21 +558,22 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     };
 
 
-    /* *** Test for m_val equal to (3) ***
-    --------------------------------------
-    */
-
     int* d_m_val;
     cudaMalloc(&d_m_val, sizeof(int)*batch_count);
 
+
+
+    // [1] Condition: n1 <= theta3:
     for (int i = 0; i < batch_count; i++) {
-        if(eta1[i] <=theta[1]){
+        if(eta1[i] <= theta[1]){
             cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
             absolute_kernel<<<dimGrid, dimBlock, 0, streams[i%3]>>>(h_d_B[i], dim);
             double p = pow(error_coefficients[1], (1.0 / (2 * 3 + 1)));
             cublasSetStream(handle, streams[i]);
             scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
-            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), streams[i%3]>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 3);
+            
+            // Condition: ell(A,3) is 0:
+            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), streams[i%3]>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 3); // Then degree of Pade approximant is set to 3
         }
     }
 
@@ -574,51 +581,48 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 
 
-   /* *** Test for m_val equal to (5) ***
-    --------------------------------------
-    */
-
+    // [2] Condition: n2 <= theta5:
     for (int i = 0; i < batch_count; i++) {
         if(eta1[i] <=theta[2]){
             cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
             absolute_kernel<<<dimGrid, dimBlock>>>(h_d_B[i], dim);
             double p = pow(error_coefficients[2], (1.0 / (2 * 5 + 1)));
             scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
-            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 5);
+
+            // Condition: ell(A, 5) is 0:
+            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 5); // Then degree of Pade approximant is set to 5
         }
     }
 
     cudaDeviceSynchronize();
     cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 
-   /* *** Test for m_val equal to (7) ***
-    --------------------------------------
-    */
 
+    // [3] Condition: n3 <= theta7:
     for (int i = 0; i < batch_count; i++) {
         if(eta3[i] <=theta[3]){
             cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
             absolute_kernel<<<dimGrid, dimBlock>>>(h_d_B[i], dim);
             double p = pow(error_coefficients[3], (1.0 / (2 * 7 + 1)));
             scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
-            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 7);
+            // Condition: ell(A, 7) is 0:
+            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 7); // Then degree of Pade approximant is set to 7
         }
     }
 
     cudaDeviceSynchronize();
     cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
   
-  /* *** Test for m_val equal to (9) ***
-    --------------------------------------
-    */
 
+    // [4] Condition: n3 <= theta9:
     for (int i = 0; i < batch_count; i++) {
         if(eta3[i] <= theta[4]){
             cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
             absolute_kernel<<<dimGrid, dimBlock>>>(h_d_B[i], dim);
             double p = pow(error_coefficients[4], (1.0 / (2 * 9 + 1)));
             scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
-            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 9);
+            // Condition: ell(A, 9) is 0:
+            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 9); // Then degree of Pade approximant is set to 9
         }
     }
 
@@ -626,11 +630,9 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 
 
-    /* *** Find the value of s indicating the number of squares that will be performed ***
-    --------------------------------------------------------------------------------------
-    */
 
-    double* s = (double*) malloc(batch_count*sizeof(double)); 
+
+    double* s = (double*) malloc(batch_count*sizeof(double)); // Variable s will hold the number of squaring resquired for stage 3 of 3
     double max = 0;
 
     // Cuda Grid setup:
@@ -642,25 +644,23 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     temp_array = (int*) malloc(sizeof(int)*batch_count);
 
     for (int i = 0; i < batch_count; i++) {
-        s[i] = fmax(ceil(log2(eta5[i]/theta[4])), 0);
+        s[i] = fmax(ceil(log2(eta5[i]/theta[4])), 0); // s = max(log2(n5,theta13), 0)
        
-       //Perform scale:
         cublasSetStream(handle, streams[i%n_streams]);
         scale_tester(handle, h_d_A[i], h_d_A[i], make_cuDoubleComplex(1/pow(2, s[i]), 0), dim);
 
-        //Perform ell:
         cudaMemcpy(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
         absolute_kernel<<<dimGrid_ell, dimBlock_ell, 0, streams[i%n_streams]>>>(h_d_B[i], dim);
         cudaDeviceSynchronize();
         scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(pow(error_coefficients[4], (1.0 / (2 * 13 + 1))), 0), dim);
+        // Find ell(2^-s*A, 13)
         ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), streams[i%n_streams]>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 13);
     }
 
     cudaMemcpy(temp_array, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 
     for (int i = 0; i < batch_count; i++) {
-        // Final value of s:
-        s[i] = s[i] + temp_array[i];
+        s[i] = s[i] + temp_array[i]; // Final value of s = s + ell(2^-s*A, 13)
         if(s[i] > max)
             max = s[i];
     }
@@ -677,18 +677,21 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     }
 
 
-    /* *** Rescale powers of A according to value of s ***
-    -------------------------------------------------------
-    */
+    // *** Rescale powers of A according to value of s *** MAPS TO PART 1 OF 3 (SCALING STAGE) IN ALGORITHM *** 
+    // --------------------------------------------------------------------------------------------------------
 
     for (int i = 0; i < batch_count; i++) {
-        if (s[i]!=0) {
-            scale_tester(handle, h_d_T1[i], h_d_T1[i], make_cuDoubleComplex(1.0 / pow(2, (s[i] * 1)), 0), dim);
-            scale_tester(handle, h_d_T2[i], h_d_T2[i], make_cuDoubleComplex(1.0 / pow(2, (s[i] * 2)), 0), dim);
-            scale_tester(handle, h_d_T4[i], h_d_T4[i], make_cuDoubleComplex(1.0 / pow(2, (s[i] * 4)), 0), dim);
-            scale_tester(handle, h_d_T6[i], h_d_T6[i], make_cuDoubleComplex(1.0 / pow(2, (s[i] * 6)), 0), dim);
+        if (s[i]!= 0) {
+            scale_tester(handle, h_d_T1[i], h_d_T1[i], make_cuDoubleComplex(1.0 / pow(2, (s[i] * 1)), 0), dim); // A = 2^-s*A 
+            scale_tester(handle, h_d_T2[i], h_d_T2[i], make_cuDoubleComplex(1.0 / pow(2, (s[i] * 2)), 0), dim); // A^2 = 2^-2s*A^2
+            scale_tester(handle, h_d_T4[i], h_d_T4[i], make_cuDoubleComplex(1.0 / pow(2, (s[i] * 4)), 0), dim); // A^4 = 2^-4s*A^4
+            scale_tester(handle, h_d_T6[i], h_d_T6[i], make_cuDoubleComplex(1.0 / pow(2, (s[i] * 6)), 0), dim); // A^6 = 2^-6s*A^6
         }
     }
+
+
+    // *** Evaluate p13(A) and q13(A) polynomials needed for finding the pade approximant r13(A) ***
+
 
     /* Get pade coefficients 
     ------------------------
@@ -709,8 +712,8 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     }
 
 
-    /* Calculate U for each matrix in batch
-    ---------------------------------------
+    /* Calculate U13 for each matrix in batch
+    -----------------------------------------
     */
 
     set_Identity(h_d_identity[0], dim, streams[1]);   
@@ -755,7 +758,7 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     cudaDeviceSynchronize();
 
 
-    /* Calculate V for each matrix in batch
+    /* Calculate V13 for each matrix in batch
     ---------------------------------------
     */
 
@@ -786,14 +789,18 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         scale_and_add(handle, h_d_identity[0], h_d_B[i], h_d_B[i], make_cuDoubleComplex(c[i][0], 0), dim, 0);
         scale_and_add(handle, h_d_A[i], h_d_B[i], h_d_B[i], make_cuDoubleComplex(1, 0), dim, 0);
 
-        /* Calculate V-U
-        ---------------
+        /* Calculate q13(A) = V-U
+        -------------------------
         */
 
         scale_and_subtract(handle, h_d_B[i], h_d_C[i], h_d_B[i], make_cuDoubleComplex(1, 0), dim); // THIS WOULD BE THE SYNCHRONIZATION POINT
     }
 
-    /* *** Calculate F = (V-U)/(2*U) + I ***
+
+    // Calulate the pade approximant rm(A) form equation (3.6) --> (-U13 + V13)r13(A) = (U13 + V13)(A) ** MAPS TO PART 2 OF 3 (PADE APPROXIMANT STAGE) IN ALGORITHM ***
+    // -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    /* *** Calculate F = (V-U)/(2*U) + I *** // CAN I DO IT THE OTHER WAY?
     ----------------------------------------
     */
 
@@ -821,10 +828,10 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         scale_and_add(handle, h_d_B[i], h_d_identity[0], h_d_B[i], make_cuDoubleComplex(1, 0), dim, 0);
     }
 
-    
-    /* *** Square each F[i] a total of s[i] times: ***
-    ---------------------------------------------------
-    */
+
+
+    // *** Square r13(A) s times through repeated squaring (X = r13(A)^2^s) *** MAPS TO PART 3 OF 3 (SQUARING STAGE) IN ALGORITHM *** 
+    // -----------------------------------------------------------------------------------------------------------------------------
 
     for (int k = 0; k < max; k++) { 
         cublasZgemmBatched(handle,
@@ -840,20 +847,22 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         cudaDeviceSynchronize();
 
         for(int i=0; i< batch_count; i++) {
+            
+            // If matrix i in batch has been squared s[i] times then copy matrix i back to host: 
             if(s[i] == (k + 1))
-                // Copy mat expm i to host array in position i: 
                 cudaMemcpy(output + i*(dim*dim), h_d_C[i], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
                 cudaMemcpy(A + i*(dim*dim), h_d_C[i], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
         }
 
-        d_B = d_C; // Switch pointers to avoid memory copies
+        // Switch pointers to avoid memory copies after every squaring
+        d_B = d_C; 
     }
 
     // printf("Matrix Exponential: \n");
     // matrix_complex_print(A, dim);
 
+    
     // free Memory:
-
     for (int i = 0; i < batch_count; i++) {
         cudaFree(h_d_T1[i]);
         cudaFree(h_d_T2[i]);
