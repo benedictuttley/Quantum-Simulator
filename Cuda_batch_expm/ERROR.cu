@@ -1,4 +1,5 @@
 // *** 29/03/2019 *** --> BATCHED WITH STREAMS
+// [1] Race condition
 
 #include <cstdio>
 #include <cstdlib>
@@ -14,6 +15,11 @@ __global__ void ell_kernel(cuDoubleComplex* A, cuDoubleComplex* B, int dim, int*
     const int tid_x = blockDim.x*blockIdx.x + threadIdx.x;
     extern __device__ double s_nrm_one[]; 
     extern __device__ double s_nrm_two[]; 
+    if(tid_x ==0){
+    // if(k==5 && val == 13){
+    //     printf("executed\n");
+    // }
+}
 
     if(tid_x < dim) {
         double sum_nrm_one = 0; // Private variable to hold column sum
@@ -27,7 +33,7 @@ __global__ void ell_kernel(cuDoubleComplex* A, cuDoubleComplex* B, int dim, int*
         s_nrm_two[tid_x] = sum_nrm_two;
     }
     
-    __syncthreads(); 
+    __syncthreads(); // SPLIT THE KERNEL HERE?
 
     if(tid_x == 1) {
         double second_norm = 0;
@@ -44,14 +50,94 @@ __global__ void ell_kernel(cuDoubleComplex* A, cuDoubleComplex* B, int dim, int*
         }
 
         double alpha = second_norm/first_norm;
+
         double output = ceil(log2((2 * alpha) / 2.220446049250313e-16) / (2 * val));
+        // if(k == 5){
+        //     printf("FIRST NORM IS: %lf \n", first_norm);
+        //     printf("SECOND NORM IS: %lf \n", second_norm);
+        //     printf("ALPHA IS: %lf \n", alpha);
+            
+        // }
 
         if(output <= 0.0)
             m_val[k] = 0.0;
 
-        if(val == 13)
+        if(val == 13){
              m_val[k] = output;
+         }
      }
+}
+
+__global__ void HELP(cuDoubleComplex* A, cuDoubleComplex* B, int dim, int* m_val, int k, int val){
+    const int tid_x = blockDim.x*blockIdx.x + threadIdx.x;
+    extern __device__ double s_nrm_oness[]; 
+    extern __device__ double s_nrm_twoss[]; 
+    
+    if(tid_x < dim) {
+        double sum_nrm_one = 0; // Private variable to hold column sum
+        double sum_nrm_two = 0; // Private variable to hold column sum
+
+    for (int i = 0; i < dim; i++) {
+        sum_nrm_one += cuCabs(A[(i*dim) + tid_x]);
+        sum_nrm_two += cuCabs(B[(i*dim) + tid_x]);
+        if(i == dim-1){
+        printf("1ST: %lf \n", sum_nrm_one);
+        printf("2ND: %lf \n", sum_nrm_two);
+    }
+    }
+        if(tid_x == 0){
+        s_nrm_oness[tid_x] = sum_nrm_one;
+        s_nrm_oness[tid_x+1] = sum_nrm_two;
+    }
+    else{
+        s_nrm_oness[tid_x+1] = sum_nrm_one;
+        s_nrm_oness[tid_x+2] = sum_nrm_two;
+    }
+    }
+    
+
+    __syncthreads(); // SPLIT THE KERNEL HERE?
+
+       if(tid_x == 0) {
+        double first_norm = 0;
+        double second_norm = 0;
+        
+        printf("1ST -->: %lf \n", s_nrm_oness[0]);
+        printf("2ND -->: %lf \n", s_nrm_oness[2]);
+
+
+
+        for (int i = 0; i < dim; i = i = i+ 2 ) {
+
+            if(first_norm < s_nrm_oness[i])
+                first_norm = s_nrm_oness[i];
+
+            if(second_norm < s_nrm_oness[i+1])
+                second_norm = s_nrm_oness[i+1];
+        }
+
+        double alpha = second_norm/first_norm;
+        double output = ceil(log2((2 * alpha) / 2.220446049250313e-16) / (2 * val));
+        
+        if(k == 5){
+            printf("1ST: %lf \n", first_norm);
+            printf("2ND: %lf \n", second_norm);
+            printf("ALPHA IS: %lf \n", alpha);
+            
+        }
+
+        if(output <= 0.0)
+            m_val[k] = 0.0;
+
+        if(val == 13){
+             m_val[k] = output;
+          }
+     }
+
+    int X = 5;
+    if (tid_x == 0) {
+        printf("THE X IS %d \n", X);
+    }
 }
 
 __global__ void identity_kernel(cuDoubleComplex* identity, int dim){
@@ -88,6 +174,7 @@ __global__ void get_one_norm( cuDoubleComplex* A, double* res, int k, int dim){
     extern __device__ double s[];  
     double sum = 0; 
 
+    
     res[k] = 0;
     
     if(tid_x < dim){ 
@@ -100,6 +187,7 @@ __global__ void get_one_norm( cuDoubleComplex* A, double* res, int k, int dim){
     __syncthreads(); 
 
     if (tid_x == 0) {
+        printf("THE DIM IS %d \n", dim);
         for (int i = 0; i < dim; i++){
             if(res[k] < s[i])
                 res[k] = s[i];
@@ -113,9 +201,9 @@ void matrix_complex_print(cuDoubleComplex* A, int network_size){
     for (int j = 0; j < network_size; j++){
         printf("[");
         for (int k = 0; k < network_size; k++){
-            printf(" %.25lf ", A[(j*network_size) + k].x );
+            printf(" %lf ", A[(j*network_size) + k].x );
             printf("+");
-            printf(" %.25lfi ", A[(j*network_size) + k].y );
+            printf("%lfi ", A[(j*network_size) + k].y );
         }
 
         printf("]");
@@ -297,23 +385,32 @@ void get_pade_coefficients(double *buf, int m) {
 
 
 
-extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int dim, int batch_count) {
 
-    /* *** Intial setup ***
+
+
+extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int dim, int batch_count) {
+// ISSUE WITH TWO ARRAYS IN ONE-NORM METHOD or introduce serial version
+//int main(int argc, char* argv[])
+//{
+
+
+ /* *** Intial setup ***
      --------------------
     */
 
     // Size of matrix input:
-	// int dim = 4;
+    // int dim = 256;
 
-    // Number of matrices in the batch:
-	// int batch_count = 10;
+    // // Number of matrices in the batch:
+    // int batch_count = 10;
  
-    // Allocate host memory for input arrry:
-    cuDoubleComplex *A = (cuDoubleComplex*)malloc(batch_count*sizeof(cuDoubleComplex*));
-    A = (cuDoubleComplex*)input;
+    // // Allocate host memory for input arrry:
+    // cuDoubleComplex **A = (cuDoubleComplex**)malloc(batch_count*sizeof(cuDoubleComplex*));
+    //     for(int i=0; i<batch_count; i++) {
+    //         A[i] = (cuDoubleComplex*)malloc(dim*dim*sizeof(cuDoubleComplex));
+    //     }
  
-    // INITIALIZE BATCHES WITH DUMMY DATA:
+    // // INITIALIZE BATCHES WITH DUMMY DATA:
     // for (int i = 0; i< batch_count; i++) {
     //     for(int j = 0; j< dim; j++){
     //         for (int k = 0; k < dim; k++)
@@ -323,8 +420,11 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     //     }
     // }
     
+     cuDoubleComplex *A = (cuDoubleComplex*)malloc(batch_count*sizeof(cuDoubleComplex*));
+    A = (cuDoubleComplex*)input;
+
     // Write input matrix for comparison:
-    //write_input_matrix(A[5], dim);
+    //write_input_matrix(A + 5*(dim*dim), dim);
 
     // Create cublas instance
     cublasHandle_t handle;
@@ -400,12 +500,12 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     cudaMemcpy(d_C, h_d_C, batch_count*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
 
 
+   
     // Copy host batch to device memory:
     for(int i=0; i<batch_count; i++) {
         cudaMemcpy(h_d_A[i], A + i*(dim*dim), dim*dim*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
         cudaMemcpy(h_d_T1[i], A + i*(dim*dim), dim*dim*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
     }
-
 
     // Alpha and beta coeficients set for zgemm:
     const cuDoubleComplex alf = make_cuDoubleComplex(1, 0);
@@ -477,6 +577,10 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         batch_count);
     cudaDeviceSynchronize();
 
+    // Multiplication Test
+    // cudaMemcpy(A[5], h_d_T2[5], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+    // matrix_complex_print(A[5], dim);
+    // exit(0);
     double* d4;
     double* d6;
     double* d8;
@@ -504,11 +608,14 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
 
     // Calculate matrix norms for each powers of A for each matrix in the batch:
     for (int i = 0; i < batch_count; i++) {
-        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), streams[1]>>>(h_d_T4[i], d_res, i, dim); 
-        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), streams[2]>>>(h_d_T6[i], d_res2, i, dim); 
-        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), streams[3]>>>(h_d_T8[i], d_res3, i, dim); 
-        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), streams[4]>>>(h_d_T10[i], d_res4, i, dim);
+        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_T4[i], d_res, i, dim);
+        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_T6[i], d_res2, i, dim); 
+        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_T8[i], d_res3, i, dim); 
+        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_T10[i], d_res4, i, dim);
     }
+    cudaDeviceSynchronize();
+    printf("DONE NORMS\n");
+    //exit(0);
 
     cudaMemcpyAsync(d4, d_res, sizeof(double)*batch_count, cudaMemcpyDeviceToHost, streams[1]);
     cudaMemcpyAsync(d6, d_res2, sizeof(double)*batch_count, cudaMemcpyDeviceToHost, streams[2]);
@@ -524,6 +631,8 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         d10[i] = pow(d10[i], (1.0 / 10));
     }
 
+    //printf("d6[5] is: %lf \n", d6[5]);
+
     double* eta1 = (double*) malloc(batch_count*sizeof(double));
     double* eta3 = (double*) malloc(batch_count*sizeof(double));
     double* eta4 = (double*) malloc(batch_count*sizeof(double));
@@ -536,6 +645,12 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         eta4[i] = fmax(d8[i], d10[i]);
         eta5[i] = fmin(eta3[i], eta4[i]); 
     }
+
+    printf("eta1[5] is: %lf \n", eta1[5]);
+    printf("eta3[5] is: %lf \n", eta3[5]);
+    printf("eta4[5] is: %lf \n", eta4[5]);
+    printf("eta5[5] is: %lf \n", eta5[5]);
+    //exit(0);
 
     // *** Find value of m_val from set {3, 5, 7, 9, 13}
 
@@ -559,71 +674,71 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     int* d_m_val;
     cudaMalloc(&d_m_val, sizeof(int)*batch_count);
 
-    for (int i = 0; i < batch_count; i++) {
-        if(eta1[i] <=theta[1]){
-            cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
-            absolute_kernel<<<dimGrid, dimBlock, 0, streams[i%3]>>>(h_d_B[i], dim);
-            double p = pow(error_coefficients[1], (1.0 / (2 * 3 + 1)));
-            cublasSetStream(handle, streams[i]);
-            scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
-            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), streams[i%3]>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 3);
-        }
-    }
+    // for (int i = 0; i < batch_count; i++) {
+    //     if(eta1[i] <=theta[1]){
+    //         cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
+    //         absolute_kernel<<<dimGrid, dimBlock, 0, streams[i%3]>>>(h_d_B[i], dim);
+    //         double p = pow(error_coefficients[1], (1.0 / (2 * 3 + 1)));
+    //         cublasSetStream(handle, streams[i]);
+    //         scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
+    //         ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), streams[i%3]>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 3);
+    //     }
+    // }
 
-    cudaDeviceSynchronize();
-    cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
+    // cudaDeviceSynchronize();
+    // cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 
 
    /* *** Test for m_val equal to (5) ***
     --------------------------------------
     */
 
-    for (int i = 0; i < batch_count; i++) {
-        if(eta1[i] <=theta[2]){
-            cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
-            absolute_kernel<<<dimGrid, dimBlock>>>(h_d_B[i], dim);
-            double p = pow(error_coefficients[2], (1.0 / (2 * 5 + 1)));
-            scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
-            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 5);
-        }
-    }
+    // for (int i = 0; i < batch_count; i++) {
+    //     if(eta1[i] <=theta[2]){
+    //         cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
+    //         absolute_kernel<<<dimGrid, dimBlock>>>(h_d_B[i], dim);
+    //         double p = pow(error_coefficients[2], (1.0 / (2 * 5 + 1)));
+    //         scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
+    //         ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 5);
+    //     }
+    // }
 
-    cudaDeviceSynchronize();
-    cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
+    // cudaDeviceSynchronize();
+    // cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 
    /* *** Test for m_val equal to (7) ***
     --------------------------------------
     */
 
-    for (int i = 0; i < batch_count; i++) {
-        if(eta3[i] <=theta[3]){
-            cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
-            absolute_kernel<<<dimGrid, dimBlock>>>(h_d_B[i], dim);
-            double p = pow(error_coefficients[3], (1.0 / (2 * 7 + 1)));
-            scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
-            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 7);
-        }
-    }
+    // for (int i = 0; i < batch_count; i++) {
+    //     if(eta3[i] <=theta[3]){
+    //         cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
+    //         absolute_kernel<<<dimGrid, dimBlock>>>(h_d_B[i], dim);
+    //         double p = pow(error_coefficients[3], (1.0 / (2 * 7 + 1)));
+    //         scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
+    //         ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 7);
+    //     }
+    // }
 
-    cudaDeviceSynchronize();
-    cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
+    // cudaDeviceSynchronize();
+    // cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
   
   /* *** Test for m_val equal to (9) ***
     --------------------------------------
     */
 
-    for (int i = 0; i < batch_count; i++) {
-        if(eta3[i] <= theta[4]){
-            cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
-            absolute_kernel<<<dimGrid, dimBlock>>>(h_d_B[i], dim);
-            double p = pow(error_coefficients[4], (1.0 / (2 * 9 + 1)));
-            scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
-            ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 9);
-        }
-    }
+    // for (int i = 0; i < batch_count; i++) {
+    //     if(eta3[i] <= theta[4]){
+    //         cudaMemcpyAsync(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToDevice);
+    //         absolute_kernel<<<dimGrid, dimBlock>>>(h_d_B[i], dim);
+    //         double p = pow(error_coefficients[4], (1.0 / (2 * 9 + 1)));
+    //         scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(p, 0), dim);
+    //         ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 9);
+    //     }
+    // }
 
-    cudaDeviceSynchronize();
-    cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
+    // cudaDeviceSynchronize();
+    // cudaMemcpy(m_val, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
 
 
     /* *** Find the value of s indicating the number of squares that will be performed ***
@@ -650,14 +765,34 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
 
         //Perform ell:
         cudaMemcpy(h_d_B[i], h_d_A[i], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-        absolute_kernel<<<dimGrid_ell, dimBlock_ell, 0, streams[i%n_streams]>>>(h_d_B[i], dim);
+        absolute_kernel<<<dimGrid_ell, dimBlock_ell, 0, 0>>>(h_d_B[i], dim);
         cudaDeviceSynchronize();
         scale_tester(handle, h_d_B[i], h_d_B[i], make_cuDoubleComplex(pow(error_coefficients[4], (1.0 / (2 * 13 + 1))), 0), dim);
-        ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), streams[i%n_streams]>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 13);
+        //ell_kernel<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 13);
+       
+        //if(i ==5){
+        //HELP<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i],h_d_B[i], dim, d_m_val, i, 13);
+        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_A[i], d_res4, i, dim);
+        get_one_norm<<<dimGrid, dimBlock, dim*sizeof(double), 0>>>(h_d_B[i], d_res3, i, dim);
+        cudaMemcpy(d4, d_res4, sizeof(double)*batch_count, cudaMemcpyDeviceToHost);
+        cudaMemcpy(d6, d_res3, sizeof(double)*batch_count, cudaMemcpyDeviceToHost);
+        
+        cudaDeviceSynchronize();
+        printf("FIRST NORM IS: %lf\n", d6[i]);
+        printf("----------------- \n");
+        printf("SECOND NORM IS: %lf\n", d4[i]);
+        double alpha = d6[i] / d4[i];
+        double output = ceil(log2((2 * alpha) / 2.220446049250313e-16) / (2 * 13));
+        temp_array[i] = output;  
+        //exit(0);
+        
+        //}
     }
-
-    cudaMemcpy(temp_array, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
-
+ 
+    cudaDeviceSynchronize();
+    printf("S BEFORE IS: %lf\n", s[5]);
+    //exit(0);
+    //cudaMemcpy(temp_array, d_m_val, sizeof(int)*batch_count, cudaMemcpyDeviceToHost);
     for (int i = 0; i < batch_count; i++) {
         // Final value of s:
         s[i] = s[i] + temp_array[i];
@@ -676,6 +811,9 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         }
     }
 
+
+    printf("S AFTER IS: %lf\n", s[5]);
+    
 
     /* *** Rescale powers of A according to value of s ***
     -------------------------------------------------------
@@ -707,6 +845,7 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
             exit(0);
         }
     }
+
 
 
     /* Calculate U for each matrix in batch
@@ -754,6 +893,7 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
 
     cudaDeviceSynchronize();
 
+ 
 
     /* Calculate V for each matrix in batch
     ---------------------------------------
@@ -777,6 +917,7 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         batch_count);
 
     cudaDeviceSynchronize();
+
                                         
   
     for (int i = 0; i < batch_count; i++) {  
@@ -793,12 +934,16 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         scale_and_subtract(handle, h_d_B[i], h_d_C[i], h_d_B[i], make_cuDoubleComplex(1, 0), dim); // THIS WOULD BE THE SYNCHRONIZATION POINT
     }
 
+
+
+
     /* *** Calculate F = (V-U)/(2*U) + I ***
     ----------------------------------------
     */
 
     // Find inverse of each (V-U) in batch through LU decomposition:
     Inverse_Batched(handle, d_B, d_A, dim, batch_count); 
+
 
     // Scale U by 2:
     for (int i = 0; i < batch_count; i++) {
@@ -826,7 +971,11 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     ---------------------------------------------------
     */
 
-    for (int k = 0; k < 2; k++) { 
+    //cudaMemcpy(A + 5*(dim*dim), h_d_B[5], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+    //matrix_complex_print(A + 5*(dim*dim), dim);
+    //exit(0);
+
+    for (int k = 0; k < max; k++) { 
         cublasZgemmBatched(handle,
             CUBLAS_OP_N, CUBLAS_OP_N,
             dim, dim, dim,
@@ -840,17 +989,26 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
         cudaDeviceSynchronize();
 
         for(int i=0; i< batch_count; i++) {
-            if(s[i] == (k + 1))
+            if(s[i] == (k + 1)){
                 // Copy mat expm i to host array in position i: 
                 cudaMemcpy(output + i*(dim*dim), h_d_C[i], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
                 cudaMemcpy(A + i*(dim*dim), h_d_C[i], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+                //cudaMemcpy(A[i], h_d_C[i], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+
+            }
         }
 
         d_B = d_C; // Switch pointers to avoid memory copies
     }
 
+    //cudaMemcpy(A + 5*(dim*dim), h_d_B[5], dim*dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+    //matrix_complex_print(A + 5*(dim*dim), dim);
+    //printf("S IS: %lf \n", s[5]);
+    //exit(0);
+
+
     // printf("Matrix Exponential: \n");
-    // matrix_complex_print(A, dim);
+    //matrix_complex_print(A[5], dim);
 
     // free Memory:
 

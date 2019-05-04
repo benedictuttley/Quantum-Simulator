@@ -826,7 +826,7 @@ extern "C" void expm_initialization(void* input, cuDoubleComplex* output, int di
     ---------------------------------------------------
     */
 
-    for (int k = 0; k < 2; k++) { 
+    for (int k = 0; k < max; k++) { 
         cublasZgemmBatched(handle,
             CUBLAS_OP_N, CUBLAS_OP_N,
             dim, dim, dim,

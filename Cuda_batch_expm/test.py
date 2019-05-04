@@ -1,4 +1,4 @@
-# Comparison of CUDA batch expm with numpy expm:
+# Comparison of CUDA batch expm with numpy expm in for-loop:
 import numpy
 import ctypes
 import scipy as sp
@@ -47,24 +47,45 @@ file.write("*** New Entry ***\n")
 file.write(" (Batch Size:" +  str(batchSize) + ", Matrix Size:" + str(dimensions) + ") \n")
 file.write(" Numpy expm runtime: " + str(python_time) + "seconds.\n")
 file.write(" CUDA expm runtime: " + str(c_time) + " seconds.\n")
+file.write(" MAE OF FIRST MATRIX IN BATCH = " + str(np.abs(outputBatchCuda[0] - outputBatchNumpy[0]).mean()) + "\n\n")
 
-nan_present = False
-precision_poor = False
-for matrix in range(0, batchSize):
-    if(np.isnan(outputBatchCuda[matrix][0][0].imag) and np.isnan(outputBatchNumpy[matrix][0][0].imag)):
-	    nan_present = True
+
+
+# print(outputBatchCuda[5][dimensions-1][dimensions-1])
+# print(outputBatchNumpy[5][dimensions-1][dimensions-1])
+# nan_present = False
+# precision_poor = False
+# TWO = False
+# THREE = False
+# FOUR = False
+# for matrix in range(0, batchSize):
+#     if(np.isnan(outputBatchCuda[matrix][0][0].imag) and np.isnan(outputBatchNumpy[matrix][0][0].imag)):
+# 	    nan_present = True
     
-    # Compare two matrices are element-wise equal within a tolerance
-    elif(np.allclose(outputBatchCuda[matrix], outputBatchNumpy[matrix], rtol=1e-5, atol=1e-5, equal_nan=True) == False):
-        precision_poor = True
+#     # Compare two matrices are element-wise equal within a tolerance
+#     elif(np.allclose(outputBatchCuda[matrix], outputBatchNumpy[matrix], rtol=1e-5, atol=1e-5, equal_nan=True) == False):
+#         precision_poor = True
+#     if(np.allclose(outputBatchCuda[matrix], outputBatchNumpy[matrix], rtol=1e-2, atol=1e-2, equal_nan=True)==False):
+#         TWO = True
+#     if(np.allclose(outputBatchCuda[matrix], outputBatchNumpy[matrix], rtol=1e-3, atol=1e-3, equal_nan=True)==False):
+#         THREE = True
+#     if(np.allclose(outputBatchCuda[matrix], outputBatchNumpy[matrix], rtol=1e-4, atol=1e-4, equal_nan=True)==False):
+#         FOUR = True
 
     
-if nan_present:
-    file.write(" Both contain NaN entries \n\n")
-elif precision_poor == False:
-        file.write(" Agreement(1e-5 tolerance): True \n\n")
-else:
-    file.write(" Agreement(1e-5 tolerance): False \n\n")
+# if nan_present:
+#     file.write(" Both contain NaN entries \n\n")
+# elif precision_poor == False:
+#         file.write(" Agreement(1e-5 tolerance): True \n\n")
+# else:
+#     file.write(" Agreement(1e-5 tolerance): False \n")
+
+# if(TWO == False):
+#         file.write("1e-2 tolerance \n")
+# if(THREE == False):
+#         file.write("1e-3 tolerance \n")
+# if(FOUR == False):
+#         file.write("1e-4 tolerance \n\n")
 
 file.close()
 

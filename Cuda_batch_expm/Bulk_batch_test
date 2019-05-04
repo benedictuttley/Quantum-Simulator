@@ -2,7 +2,7 @@
 # Bash script to test performance and accuracy of C expm (utilising openBLAS & LAPACK) compared to Pythons numpy expm
 
 # compile the C expm shared library:
-nvcc --shared -Xcompiler -fPIC -shared expm_batched.cu -o ctestcuda.a -lcublas -O3
+nvcc --shared -Xcompiler -fPIC -shared ERROR.cu -o ctestcuda.a -lcublas -O3
 
 # Create file and containing folder holding results:
 touch Bulk_Results_Batch.txt
@@ -10,11 +10,11 @@ results_filename="Bulk_Results_Cuda.txt"
 > $results_filename
 
 # Loop through increasing batch sizes
-for batch_size in 10 50 100 150 200 250 300
+for batch_size in 100 200 300 400 500
     do
     echo ...   
     # Loop through increasing matrix sizes:
-    for length in 4 8 16 32
+    for length in 8 16 32 64 128
         do
 	        python3 test.py $length $results_filename $batch_size  # Run
         done

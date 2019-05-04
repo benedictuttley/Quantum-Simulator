@@ -1,168 +1,150 @@
 *** New Entry ***
- (Batch Size:10, Matrix Size:4) 
- Numpy expm runtime: 0.0077991485595703125seconds.
- CUDA expm runtime: 0.22969603538513184 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:10, Matrix Size:8) 
- Numpy expm runtime: 0.008942604064941406seconds.
- CUDA expm runtime: 0.23069119453430176 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:10, Matrix Size:16) 
- Numpy expm runtime: 0.012779474258422852seconds.
- CUDA expm runtime: 0.22279620170593262 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:10, Matrix Size:32) 
- Numpy expm runtime: 0.0175321102142334seconds.
- CUDA expm runtime: 0.22679734230041504 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:50, Matrix Size:4) 
- Numpy expm runtime: 0.020141124725341797seconds.
- CUDA expm runtime: 0.22887682914733887 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:50, Matrix Size:8) 
- Numpy expm runtime: 0.030444622039794922seconds.
- CUDA expm runtime: 0.2320389747619629 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:50, Matrix Size:16) 
- Numpy expm runtime: 0.043717145919799805seconds.
- CUDA expm runtime: 0.23164987564086914 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:50, Matrix Size:32) 
- Numpy expm runtime: 0.06850171089172363seconds.
- CUDA expm runtime: 0.2516617774963379 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:100, Matrix Size:4) 
- Numpy expm runtime: 0.03410935401916504seconds.
- CUDA expm runtime: 0.2488391399383545 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
  (Batch Size:100, Matrix Size:8) 
- Numpy expm runtime: 0.051519155502319336seconds.
- CUDA expm runtime: 0.24426698684692383 seconds.
- Agreement(1e-5 tolerance): True 
+ Numpy expm runtime: 0.051064252853393555seconds.
+ CUDA expm runtime: 0.3619675636291504 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 3.272905422361744e-07
 
 *** New Entry ***
  (Batch Size:100, Matrix Size:16) 
- Numpy expm runtime: 0.07052850723266602seconds.
- CUDA expm runtime: 0.2595250606536865 seconds.
- Agreement(1e-5 tolerance): True 
+ Numpy expm runtime: 0.08595800399780273seconds.
+ CUDA expm runtime: 0.3784606456756592 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 3.65745224011442e-05
 
 *** New Entry ***
  (Batch Size:100, Matrix Size:32) 
- Numpy expm runtime: 0.13334035873413086seconds.
- CUDA expm runtime: 0.27577781677246094 seconds.
- Agreement(1e-5 tolerance): True 
+ Numpy expm runtime: 0.13422632217407227seconds.
+ CUDA expm runtime: 0.39019083976745605 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 0.11072456765920402
 
 *** New Entry ***
- (Batch Size:150, Matrix Size:4) 
- Numpy expm runtime: 0.04936838150024414seconds.
- CUDA expm runtime: 0.2638852596282959 seconds.
- Agreement(1e-5 tolerance): True 
+ (Batch Size:100, Matrix Size:64) 
+ Numpy expm runtime: 0.35295534133911133seconds.
+ CUDA expm runtime: 0.46883511543273926 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 379077.68362074613
 
 *** New Entry ***
- (Batch Size:150, Matrix Size:8) 
- Numpy expm runtime: 0.07707715034484863seconds.
- CUDA expm runtime: 0.26739025115966797 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:150, Matrix Size:16) 
- Numpy expm runtime: 0.10373497009277344seconds.
- CUDA expm runtime: 0.27437567710876465 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:150, Matrix Size:32) 
- Numpy expm runtime: 0.19459056854248047seconds.
- CUDA expm runtime: 0.30208253860473633 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:200, Matrix Size:4) 
- Numpy expm runtime: 0.08158183097839355seconds.
- CUDA expm runtime: 0.2651989459991455 seconds.
- Agreement(1e-5 tolerance): True 
+ (Batch Size:100, Matrix Size:128) 
+ Numpy expm runtime: 1.2321946620941162seconds.
+ CUDA expm runtime: 0.9186654090881348 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 6.187633736036265e+19
 
 *** New Entry ***
  (Batch Size:200, Matrix Size:8) 
- Numpy expm runtime: 0.09829163551330566seconds.
- CUDA expm runtime: 0.27251386642456055 seconds.
- Agreement(1e-5 tolerance): True 
+ Numpy expm runtime: 0.09912824630737305seconds.
+ CUDA expm runtime: 0.42913055419921875 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 4.347820596307644e-07
 
 *** New Entry ***
  (Batch Size:200, Matrix Size:16) 
- Numpy expm runtime: 0.13208413124084473seconds.
- CUDA expm runtime: 0.29178285598754883 seconds.
- Agreement(1e-5 tolerance): True 
+ Numpy expm runtime: 0.15535664558410645seconds.
+ CUDA expm runtime: 0.43801426887512207 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 1.1987504396672052e-05
 
 *** New Entry ***
  (Batch Size:200, Matrix Size:32) 
- Numpy expm runtime: 0.26969122886657715seconds.
- CUDA expm runtime: 0.3301980495452881 seconds.
- Agreement(1e-5 tolerance): True 
+ Numpy expm runtime: 0.28282999992370605seconds.
+ CUDA expm runtime: 0.473529577255249 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 0.031384199728833384
 
 *** New Entry ***
- (Batch Size:250, Matrix Size:4) 
- Numpy expm runtime: 0.09454631805419922seconds.
- CUDA expm runtime: 0.284290075302124 seconds.
- Agreement(1e-5 tolerance): True 
+ (Batch Size:200, Matrix Size:64) 
+ Numpy expm runtime: 0.6867523193359375seconds.
+ CUDA expm runtime: 0.6193599700927734 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 1166416.7277461786
 
 *** New Entry ***
- (Batch Size:250, Matrix Size:8) 
- Numpy expm runtime: 0.12334179878234863seconds.
- CUDA expm runtime: 0.2820878028869629 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:250, Matrix Size:16) 
- Numpy expm runtime: 0.16672801971435547seconds.
- CUDA expm runtime: 0.3059978485107422 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:250, Matrix Size:32) 
- Numpy expm runtime: 0.3405489921569824seconds.
- CUDA expm runtime: 0.3602182865142822 seconds.
- Agreement(1e-5 tolerance): True 
-
-*** New Entry ***
- (Batch Size:300, Matrix Size:4) 
- Numpy expm runtime: 0.10990500450134277seconds.
- CUDA expm runtime: 0.3130974769592285 seconds.
- Agreement(1e-5 tolerance): True 
+ (Batch Size:200, Matrix Size:128) 
+ Numpy expm runtime: 2.176938056945801seconds.
+ CUDA expm runtime: 1.5084514617919922 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 3.8242231705960055e+19
 
 *** New Entry ***
  (Batch Size:300, Matrix Size:8) 
- Numpy expm runtime: 0.18197894096374512seconds.
- CUDA expm runtime: 0.3223426342010498 seconds.
- Agreement(1e-5 tolerance): True 
+ Numpy expm runtime: 0.140669584274292seconds.
+ CUDA expm runtime: 0.4647715091705322 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 3.4990227136205757e-07
 
 *** New Entry ***
  (Batch Size:300, Matrix Size:16) 
- Numpy expm runtime: 0.4618339538574219seconds.
- CUDA expm runtime: 0.3260924816131592 seconds.
- Agreement(1e-5 tolerance): True 
+ Numpy expm runtime: 0.2025146484375seconds.
+ CUDA expm runtime: 0.4951183795928955 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 2.5884290533352454e-05
 
 *** New Entry ***
  (Batch Size:300, Matrix Size:32) 
- Numpy expm runtime: 3.7918334007263184seconds.
- CUDA expm runtime: 0.3712022304534912 seconds.
- Agreement(1e-5 tolerance): True 
+ Numpy expm runtime: 0.3788490295410156seconds.
+ CUDA expm runtime: 0.562255859375 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 0.10162456709280615
+
+*** New Entry ***
+ (Batch Size:300, Matrix Size:64) 
+ Numpy expm runtime: 0.9927868843078613seconds.
+ CUDA expm runtime: 0.7921767234802246 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 597594.6233211978
+
+*** New Entry ***
+ (Batch Size:300, Matrix Size:128) 
+ Numpy expm runtime: 3.306340217590332seconds.
+ CUDA expm runtime: 2.1262173652648926 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 4.818830663111477e+19
+
+*** New Entry ***
+ (Batch Size:400, Matrix Size:8) 
+ Numpy expm runtime: 0.18761992454528809seconds.
+ CUDA expm runtime: 0.5363004207611084 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 4.221955363773753e-07
+
+*** New Entry ***
+ (Batch Size:400, Matrix Size:16) 
+ Numpy expm runtime: 0.26105570793151855seconds.
+ CUDA expm runtime: 0.5622820854187012 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 2.6160857009148143e-05
+
+*** New Entry ***
+ (Batch Size:400, Matrix Size:32) 
+ Numpy expm runtime: 2.6628360748291016seconds.
+ CUDA expm runtime: 0.6527669429779053 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 0.053099269781294076
+
+*** New Entry ***
+ (Batch Size:400, Matrix Size:64) 
+ Numpy expm runtime: 1.332585334777832seconds.
+ CUDA expm runtime: 0.9616117477416992 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 958537.9604999111
+
+*** New Entry ***
+ (Batch Size:400, Matrix Size:128) 
+ Numpy expm runtime: 4.407484769821167seconds.
+ CUDA expm runtime: 2.7569804191589355 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 2.9523921436302606e+19
+
+*** New Entry ***
+ (Batch Size:500, Matrix Size:8) 
+ Numpy expm runtime: 0.2362356185913086seconds.
+ CUDA expm runtime: 0.588247537612915 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 2.3411159052483958e-07
+
+*** New Entry ***
+ (Batch Size:500, Matrix Size:16) 
+ Numpy expm runtime: 0.32410573959350586seconds.
+ CUDA expm runtime: 0.6382029056549072 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 2.6153853948444758e-05
+
+*** New Entry ***
+ (Batch Size:500, Matrix Size:32) 
+ Numpy expm runtime: 0.6398129463195801seconds.
+ CUDA expm runtime: 0.7488155364990234 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 0.08301825714830169
+
+*** New Entry ***
+ (Batch Size:500, Matrix Size:64) 
+ Numpy expm runtime: 1.6782968044281006seconds.
+ CUDA expm runtime: 1.1226496696472168 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 471965.43614863453
+
+*** New Entry ***
+ (Batch Size:500, Matrix Size:128) 
+ Numpy expm runtime: 5.48546838760376seconds.
+ CUDA expm runtime: 3.391864538192749 seconds.
+ MAE OF FIRST MATRIX IN BATCH = 4.4220312348233875e+19
 
